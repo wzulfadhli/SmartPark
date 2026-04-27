@@ -765,13 +765,6 @@ document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshData();
 });
 
-window.addEventListener('beforeunload', (e) => {
-    if (Object.keys(activeSessions).length > 0) {
-        e.preventDefault();
-        e.returnValue = 'There are active parking sessions. Are you sure you want to leave?';
-    }
-});
-
 // Theme
 function toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme');
