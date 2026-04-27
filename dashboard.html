@@ -518,8 +518,12 @@
             document.getElementById('kpiOccupancyPct').textContent = total ? Math.round((occupied / total) * 100) + '%' : '0%';
             document.getElementById('kpiCompounded').textContent = compounded;
 
-            // Donut
-            buildDonut(available - violBays, occupied - violBays, violBays);
+            // Donut — clamp to 0 to avoid negative values when all occupied bays are violations
+            buildDonut(
+                Math.max(0, available),
+                Math.max(0, occupied - violBays),
+                violBays
+            );
 
             // Append time-series point
             const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -542,21 +546,15 @@
             renderViolationHistory();
         }
 
-        // ---- Hook into app.js Firebase listeners ----
-        // app.js calls updateAll() on every Firebase push; we override it here
-        // to also call our dashboard-specific update.
-        const _origUpdateAll = window.updateAll;
-        window.updateAll = function() {
-            if (typeof _origUpdateAll === 'function') _origUpdateAll();
-            updateDashboard();
-        };
+        // ---- Hook into app.js Firebase listeners via custom event ----
+        // app.js dispatches 'parkingDataUpdated' on every Firebase push — no fragile override needed
+        window.addEventListener('parkingDataUpdated', updateDashboard);
 
         // Initial render once app.js has initialised
         $(document).ready(() => {
-            // Give app.js a moment to boot and attach Firebase listeners
+            // Initial render — give app.js a moment to boot and attach Firebase listeners
             setTimeout(updateDashboard, 500);
-            // Keep sensor "last updated" clock ticking
-            setInterval(updateDashboard, 5000);
+            // Further updates are driven by the parkingDataUpdated event fired from app.js
         });
 
         // Listen for commands from parent shell

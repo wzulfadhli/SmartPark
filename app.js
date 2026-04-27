@@ -9,13 +9,13 @@ const DB_NAME = 'SmartParkingDB';
 // Project Settings → Your Apps → Firebase SDK snippet → Config
 // ============================================================
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBiOLREiC_2EvhVuaLu9duJGedYxvM1yg8",
-  authDomain: "smartpark-26.firebaseapp.com",
-  databaseURL: "https://smartpark-26-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "smartpark-26",
-  storageBucket: "smartpark-26.firebasestorage.app",
-  messagingSenderId: "259377487081",
-  appId: "1:259377487081:web:bf424b51abb59ca7c32478"
+    apiKey: "AIzaSyBiOLREiC_2EvhVuaLu9duJGedYxvM1yg8",
+    authDomain: "smartpark-26.firebaseapp.com",
+    databaseURL: "https://smartpark-26-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "smartpark-26",
+    storageBucket: "smartpark-26.firebasestorage.app",
+    messagingSenderId: "259377487081",
+    appId: "1:259377487081:web:bf424b51abb59ca7c32478"
 };
 // ============================================================
 
@@ -112,12 +112,11 @@ const bays = [
 // Exposed on window so dashboard.html (same origin iframe) can read them
 let activeSessions = {};
 let violations = [];
-let enforcerAlerts = [];
 
 // Expose bay config and state as window globals for cross-page reads
 window.BAYS = bays;
 Object.defineProperty(window, 'activeSessions', { get: () => activeSessions, set: v => { activeSessions = v; } });
-Object.defineProperty(window, 'violations',     { get: () => violations,     set: v => { violations = v; } });
+Object.defineProperty(window, 'violations', { get: () => violations, set: v => { violations = v; } });
 
 // ============================================================
 // FIREBASE INIT & REALTIME LISTENERS
@@ -305,7 +304,7 @@ function renderBays() {
     grid.empty();
 
     bays.forEach(bay => {
-        const session = activeSessions[bay.id];
+        const session = activeSessions[String(bay.id)];
         let statusClass = 'bay-available';
 
         if (session) {
@@ -334,7 +333,7 @@ function renderBays() {
 }
 
 async function toggleBay(bayId) {
-    if (activeSessions[bayId]) {
+    if (activeSessions[String(bayId)]) {
         await endParkingSession(bayId);
     } else {
         await startParkingSession(bayId);
@@ -355,8 +354,8 @@ async function startParkingSession(bayId) {
         status: 'active'
     };
 
-    // Write to Firebase — all devices will see this instantly via the listener
-    activeSessions[bayId] = session;
+    // Write to Firebase — coerce bayId to string to match Firebase key format
+    activeSessions[String(bayId)] = session;
     await syncSessionsToFirebase();
 
     // Also persist locally for offline support
@@ -367,10 +366,10 @@ async function startParkingSession(bayId) {
 }
 
 async function endParkingSession(bayId) {
-    const session = activeSessions[bayId];
+    const session = activeSessions[String(bayId)];
     if (!session) return;
 
-    const bay = bays.find(b => b.id === bayId);
+    const bay = bays.find(b => b.id === parseInt(bayId));
     const duration = Math.floor((Date.now() - session.startTime) / 60000);
 
     if (duration > bay.maxMinutes) {
@@ -384,10 +383,34 @@ async function endParkingSession(bayId) {
     session.duration = duration;
     await saveOfflineData('parkingSessions', session);
 
-    delete activeSessions[bayId];
+    delete activeSessions[String(bayId)];
 
     // Push deletion to Firebase — all devices update instantly
     await syncSessionsToFirebase();
+
+    // Auto-dismiss any pending violation for this bay — car has left
+    if (violationsRef) {
+        try {
+            const snapshot = await violationsRef
+                .orderByChild('bayId')
+                .equalTo(String(bayId))
+                .once('value');
+            if (snapshot.val()) {
+                Object.entries(snapshot.val()).forEach(([key, v]) => {
+                    if (!v.compounded) {
+                        violationsRef.child(key).update({
+                            status: 'dismissed',
+                            compounded: true,
+                            dismissedAt: new Date().toISOString(),
+                            dismissReason: 'vehicle_left'
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('[Firebase] Could not dismiss violation on session end:', e);
+        }
+    }
 
     if ('vibrate' in navigator) navigator.vibrate([50, 50, 50]);
 }
@@ -441,7 +464,7 @@ async function triggerEnforcerAlert(bayId) {
     const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
     const overstay = elapsed - bay.maxMinutes;
 
-    try { document.getElementById('alertSound').play(); } catch (e) {}
+    try { document.getElementById('alertSound').play(); } catch (e) { }
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 200]);
 
     const violation = {
@@ -457,7 +480,6 @@ async function triggerEnforcerAlert(bayId) {
     };
 
     violations.push(violation);
-    enforcerAlerts.push(violation);
 
     // Sync violation to Firebase — all devices see it
     await syncViolationToFirebase(violation);
@@ -537,6 +559,10 @@ async function compoundViolation(violationId) {
 
 async function compoundAllViolations() {
     const pendingViolations = violations.filter(v => !v.compounded);
+    if (pendingViolations.length === 0) {
+        showNotification('No pending violations to compound', 'info');
+        return;
+    }
     for (let violation of pendingViolations) {
         violation.compounded = true;
         violation.status = 'compounded';
@@ -668,7 +694,6 @@ async function resetAllBays() {
 
     activeSessions = {};
     violations = [];
-    enforcerAlerts = [];
 
     // Clear Firebase
     if (sessionsRef) await sessionsRef.set(null);
@@ -692,6 +717,8 @@ function updateAll() {
     updateStats();
     updateActiveSessionsTable();
     updateEnforcerPanel();
+    // Notify other scripts (e.g. dashboard.html) that data has changed
+    window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
 }
 
 function startTimers() {
@@ -763,6 +790,13 @@ async function syncOfflineQueue() {
 
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshData();
+});
+
+window.addEventListener('beforeunload', (e) => {
+    if (Object.keys(activeSessions).length > 0) {
+        e.preventDefault();
+        e.returnValue = 'There are active parking sessions. Are you sure you want to leave?';
+    }
 });
 
 // Theme

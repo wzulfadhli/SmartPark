@@ -7,7 +7,6 @@ const STATIC_ASSETS = [
     './monitor.html',
     './dashboard.html',
     './map.html',
-    './map.html',
     './theme.css',
     './app.js',
     './manifest.json',
