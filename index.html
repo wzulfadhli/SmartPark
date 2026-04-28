@@ -411,15 +411,17 @@
                     <span class="nav-label">Parking Map</span>
                 </button>
 
-                <div class="nav-divider"></div>
-                <span class="nav-section-label">Actions</span>
+                <div class="nav-divider" id="actionsDivider" style="display:none;"></div>
+                <span class="nav-section-label" id="actionsLabel" style="display:none;">Actions</span>
 
-                <button class="nav-item-btn" onclick="broadcastToFrame({type:'simulate'})">
+                <button class="nav-item-btn" id="btnSimulate" style="display:none;"
+                    onclick="broadcastToFrame({type:'simulate'})">
                     <i class="bi bi-car-front"></i>
                     <span class="nav-label">Simulate Car</span>
                 </button>
 
-                <button class="nav-item-btn" onclick="broadcastToFrame({type:'reset'})">
+                <button class="nav-item-btn" id="btnReset" style="display:none;"
+                    onclick="broadcastToFrame({type:'reset'})">
                     <i class="bi bi-arrow-counterclockwise"></i>
                     <span class="nav-label">Reset Bays</span>
                 </button>
@@ -489,6 +491,14 @@
             document.getElementById('frameLoader').classList.remove('hidden');
             document.getElementById('pageFrame').src = PAGES[page].src;
             closeMobileSidebar();
+
+            // Show action buttons only on Monitor
+            const monitorOnly = page === 'monitor';
+            const display = monitorOnly ? '' : 'none';
+            document.getElementById('actionsDivider').style.display = display;
+            document.getElementById('actionsLabel').style.display = display;
+            document.getElementById('btnSimulate').style.display = display;
+            document.getElementById('btnReset').style.display = display;
         }
 
         document.getElementById('pageFrame').addEventListener('load', () => {
