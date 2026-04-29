@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,8 +11,16 @@
     <link rel="stylesheet" href="theme.css">
 
     <style>
-        body { padding: 24px; overflow-y: auto; }
-        @media (max-width: 768px) { body { padding: 16px; } }
+        body {
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+        }
 
         /* KPI Cards */
         .kpi-card {
@@ -22,16 +31,49 @@
             box-shadow: var(--card-shadow);
             transition: transform 0.2s;
         }
-        .kpi-card:hover { transform: translateY(-2px); }
-        .kpi-value { font-size: 2rem; font-weight: 800; line-height: 1; color: var(--text-primary); }
-        .kpi-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-top: 4px; }
-        .kpi-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; }
-        .kpi-sub .up   { color: var(--accent-success); }
-        .kpi-sub .down { color: var(--accent-danger); }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--text-primary);
+        }
+
+        .kpi-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .kpi-sub {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .kpi-sub .up {
+            color: var(--accent-success);
+        }
+
+        .kpi-sub .down {
+            color: var(--accent-danger);
+        }
+
         .kpi-icon {
-            width: 44px; height: 44px;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 12px; font-size: 1.2rem;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-size: 1.2rem;
         }
 
         /* Chart containers */
@@ -42,57 +84,162 @@
             padding: 20px 24px;
             box-shadow: var(--card-shadow);
         }
+
         .chart-title {
-            font-size: 0.9rem; font-weight: 700;
-            color: var(--text-primary); margin-bottom: 4px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
         }
-        .chart-sub { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 16px; }
-        .chart-wrapper { position: relative; }
+
+        .chart-sub {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+        }
 
         /* Sensor status grid */
-        .sensor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
         .sensor-item {
             background: var(--surface-color);
             border: 1px solid var(--border-color);
-            border-radius: 12px; padding: 12px;
-            display: flex; flex-direction: column; gap: 6px;
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             box-shadow: var(--card-shadow);
             transition: transform 0.2s;
         }
-        .sensor-item:hover { transform: translateY(-1px); }
-        .sensor-id { font-size: 0.7rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
-        .sensor-bay { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); }
-        .sensor-status {
-            display: inline-flex; align-items: center; gap: 5px;
-            font-size: 0.72rem; font-weight: 600;
-            padding: 3px 8px; border-radius: 20px;
+
+        .sensor-item:hover {
+            transform: translateY(-1px);
         }
-        .sensor-status.online  { background: rgba(16,185,129,0.12); color: #10b981; }
-        .sensor-status.offline { background: rgba(239,68,68,0.1);   color: #ef4444; }
-        .sensor-status.occupied { background: rgba(59,66,86,0.12); color: var(--accent-primary); }
-        .sensor-status.violation { background: rgba(239,68,68,0.1); color: #ef4444; }
+
+        .sensor-id {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .sensor-bay {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .sensor-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 20px;
+        }
+
+        .sensor-status.online {
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+        }
+
+        .sensor-status.offline {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .sensor-status.occupied {
+            background: rgba(59, 66, 86, 0.12);
+            color: var(--accent-primary);
+        }
+
+        .sensor-status.violation {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
         .sensor-dot {
-            width: 6px; height: 6px; border-radius: 50%;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
             animation: pulse-dot 2s ease-in-out infinite;
         }
-        .online .sensor-dot    { background: #10b981; }
-        .occupied .sensor-dot  { background: var(--accent-primary); }
-        .violation .sensor-dot { background: #ef4444; }
+
+        .online .sensor-dot {
+            background: #10b981;
+        }
+
+        .occupied .sensor-dot {
+            background: var(--accent-primary);
+        }
+
+        .violation .sensor-dot {
+            background: #ef4444;
+        }
+
         @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
         }
 
         /* Violation history table */
-        .violation-row { font-size: 0.85rem; }
-        .compounded-badge { background: rgba(16,185,129,0.12); color: #10b981; border-radius: 20px; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; }
-        .pending-badge    { background: rgba(239,68,68,0.1);   color: #ef4444; border-radius: 20px; padding: 2px 10px; font-size: 0.75rem; font-weight: 600; }
+        .violation-row {
+            font-size: 0.85rem;
+        }
+
+        .compounded-badge {
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .pending-badge {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
 
         /* Section headers */
-        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-        .section-title  { font-size: 1rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
     </style>
 </head>
+
 <body>
     <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
 
@@ -167,9 +314,12 @@
                     <canvas id="occupancyDonut"></canvas>
                 </div>
                 <div class="d-flex justify-content-center gap-4 mt-3" style="font-size:0.8rem;">
-                    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;margin-right:5px;"></span>Available</span>
-                    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3b4256;margin-right:5px;"></span>Occupied</span>
-                    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:5px;"></span>Violation</span>
+                    <span><span
+                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;margin-right:5px;"></span>Available</span>
+                    <span><span
+                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3b4256;margin-right:5px;"></span>Occupied</span>
+                    <span><span
+                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:5px;"></span>Violation</span>
                 </div>
             </div>
         </div>
@@ -178,9 +328,46 @@
         <div class="col-md-8">
             <div class="chart-card h-100">
                 <div class="chart-title">Occupancy Over Time</div>
-                <div class="chart-sub">Bays occupied (last 20 snapshots, 5s interval)</div>
+                <div class="chart-sub">Average occupied bays during operating hours (last 7 days)</div>
                 <div class="chart-wrapper" style="height: 200px;">
                     <canvas id="occupancyLine"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Summary Stats Row ===== -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="kpi-card d-flex align-items-center gap-3">
+                <div class="kpi-icon" style="background:rgba(99,102,241,0.1); color:#6366f1; flex-shrink:0;">
+                    <i class="bi bi-calendar-week"></i>
+                </div>
+                <div>
+                    <div class="kpi-value" id="kpiSessions" style="font-size:1.5rem;">—</div>
+                    <div class="kpi-label">Total Sessions (7 days)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kpi-card d-flex align-items-center gap-3">
+                <div class="kpi-icon" style="background:rgba(239,68,68,0.1); color:#ef4444; flex-shrink:0;">
+                    <i class="bi bi-shield-exclamation"></i>
+                </div>
+                <div>
+                    <div class="kpi-value" id="kpiHistViolations" style="font-size:1.5rem;">—</div>
+                    <div class="kpi-label">Total Violations (7 days)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kpi-card d-flex align-items-center gap-3">
+                <div class="kpi-icon" style="background:rgba(16,185,129,0.12); color:#10b981; flex-shrink:0;">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
+                <div>
+                    <div class="kpi-value" id="kpiHistFees" style="font-size:1.5rem;">—</div>
+                    <div class="kpi-label">Total Fees Collected (7 days)</div>
                 </div>
             </div>
         </div>
@@ -191,7 +378,7 @@
         <div class="col-md-6">
             <div class="chart-card">
                 <div class="chart-title">Violations Over Time</div>
-                <div class="chart-sub">Cumulative violations recorded</div>
+                <div class="chart-sub">Total violations per day (last 7 days)</div>
                 <div class="chart-wrapper" style="height: 180px;">
                     <canvas id="violationsLine"></canvas>
                 </div>
@@ -203,6 +390,30 @@
                 <div class="chart-sub">Total violations per parking bay</div>
                 <div class="chart-wrapper" style="height: 180px;">
                     <canvas id="violationsBar"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Fees + Peak Hours Charts ===== -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="chart-card">
+                <div class="chart-title">Fees Collected <span class="text-muted fw-normal"
+                        style="font-size:0.75rem;">(Last 7 Days)</span></div>
+                <div class="chart-sub">Daily compound fee totals in RM</div>
+                <div class="chart-wrapper" style="height: 180px;">
+                    <canvas id="feeChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-card">
+                <div class="chart-title">Peak Hours <span class="text-muted fw-normal" style="font-size:0.75rem;">(7-Day
+                        Average)</span></div>
+                <div class="chart-sub">Average occupied bays by hour — red bar = busiest hour</div>
+                <div class="chart-wrapper" style="height: 180px;">
+                    <canvas id="peakChart"></canvas>
                 </div>
             </div>
         </div>
@@ -237,7 +448,9 @@
                         </tr>
                     </thead>
                     <tbody id="violationHistoryTable">
-                        <tr><td colspan="6" class="text-center text-muted py-4">No violations recorded yet</td></tr>
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">No violations recorded yet</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -253,161 +466,158 @@
 
     <script>
         // ============================================================
-        // Dashboard-specific logic — reads from shared activeSessions
-        // and violations populated by app.js Firebase listeners
+        // Dashboard — historical + live data from Firebase
         // ============================================================
 
-        // Time-series buffers (capped at 20 points)
-        const MAX_POINTS = 20;
-        let occupancyHistory = [];
-        let violationHistory  = [];
+        // Historical data buffers (populated from Firebase on load)
+        let occupancyHistory = [];   // { label, value } — avg occupied per day
+        let violationHistory = [];   // { label, value } — total violations per day
+        let feeHistory = [];   // { label, value } — fees per day
+        let peakHoursData = [];   // { label, value } — avg occupied per hour
+        let violByBayData = [];   // per-bay violation counts from Firebase history
+        let historicalLoaded = false;
 
         // Chart instances
-        let donutChart, lineChart, violLineChart, violBarChart;
+        let donutChart, lineChart, violLineChart, violBarChart, feeChart, peakChart;
 
-        // ---- Helper: get theme-aware chart colours ----
+        // ---- Theme-aware colours ----
         function chartColors() {
             const dark = document.documentElement.getAttribute('data-theme') === 'dark';
             return {
-                grid:    dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-                text:    dark ? '#94a3b8' : '#6b7280',
-                surface: dark ? '#1e293b' : '#ffffff',
+                grid: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                text: dark ? '#94a3b8' : '#6b7280',
             };
         }
 
-        // ---- Build / update donut ----
+        // ---- Donut (live snapshot) ----
         function buildDonut(available, occupied, violation) {
-            const c = chartColors();
             const ctx = document.getElementById('occupancyDonut').getContext('2d');
-            const data = {
-                datasets: [{
-                    data: [available, occupied, violation],
-                    backgroundColor: ['#10b981','#3b4256','#ef4444'],
-                    borderWidth: 0,
-                    hoverOffset: 6,
-                }]
-            };
             if (donutChart) {
                 donutChart.data.datasets[0].data = [available, occupied, violation];
-                donutChart.update('none');
-                return;
+                donutChart.update('none'); return;
             }
             donutChart = new Chart(ctx, {
                 type: 'doughnut',
-                data,
+                data: {
+                    datasets: [{
+                        data: [available, occupied, violation],
+                        backgroundColor: ['#10b981', '#3b4256', '#ef4444'], borderWidth: 0, hoverOffset: 6
+                    }]
+                },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
-                    cutout: '68%',
+                    responsive: true, maintainAspectRatio: false, cutout: '68%',
                     plugins: {
                         legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => ` ${ctx.parsed} bay${ctx.parsed !== 1 ? 's' : ''}`
-                            }
-                        }
+                        tooltip: { callbacks: { label: c => ` ${c.parsed} bay${c.parsed !== 1 ? 's' : ''}` } }
                     }
                 }
             });
         }
 
-        // ---- Build occupancy line ----
+        // ---- Occupancy line — avg per day (operating hours only) ----
         function buildOccupancyLine() {
             const c = chartColors();
             const ctx = document.getElementById('occupancyLine').getContext('2d');
             if (lineChart) {
-                lineChart.data.labels   = occupancyHistory.map(p => p.label);
+                lineChart.data.labels = occupancyHistory.map(p => p.label);
                 lineChart.data.datasets[0].data = occupancyHistory.map(p => p.value);
-                lineChart.update('none');
-                return;
+                lineChart.update('none'); return;
             }
             lineChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: occupancyHistory.map(p => p.label),
                     datasets: [{
-                        label: 'Occupied bays',
-                        data: occupancyHistory.map(p => p.value),
+                        label: 'Avg occupied bays', data: occupancyHistory.map(p => p.value),
                         borderColor: '#6366f1',
-                        backgroundColor: 'rgba(99,102,241,0.08)',
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#6366f1',
-                        fill: true,
-                        tension: 0.4,
+                        backgroundColor: (ctx2) => {
+                            const gradient = ctx2.chart.ctx.createLinearGradient(0, 0, 0, ctx2.chart.height);
+                            gradient.addColorStop(0, 'rgba(99,102,241,0.3)');
+                            gradient.addColorStop(1, 'rgba(99,102,241,0.02)');
+                            return gradient;
+                        },
+                        borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
+                        pointBackgroundColor: '#6366f1', pointBorderColor: '#fff', pointBorderWidth: 2,
+                        fill: true, tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { grid: { color: c.grid }, ticks: { color: c.text, maxTicksLimit: 6 } },
+                        x: { grid: { color: c.grid }, ticks: { color: c.text } },
                         y: {
                             grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 },
                             min: 0, max: 8,
-                            title: { display: false }
+                            title: { display: true, text: 'Bays', color: c.text, font: { size: 11 } }
                         }
                     },
-                    plugins: { legend: { display: false } }
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} bays avg` } }
+                    }
                 }
             });
         }
 
-        // ---- Build violations line ----
+        // ---- Violations line — total per day (from dailySummary) ----
         function buildViolLine() {
             const c = chartColors();
             const ctx = document.getElementById('violationsLine').getContext('2d');
             if (violLineChart) {
                 violLineChart.data.labels = violationHistory.map(p => p.label);
                 violLineChart.data.datasets[0].data = violationHistory.map(p => p.value);
-                violLineChart.update('none');
-                return;
+                violLineChart.update('none'); return;
             }
             violLineChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: violationHistory.map(p => p.label),
                     datasets: [{
-                        label: 'Cumulative violations',
-                        data: violationHistory.map(p => p.value),
+                        label: 'Violations', data: violationHistory.map(p => p.value),
                         borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239,68,68,0.07)',
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#ef4444',
-                        fill: true,
-                        tension: 0.4,
+                        backgroundColor: (ctx2) => {
+                            const gradient = ctx2.chart.ctx.createLinearGradient(0, 0, 0, ctx2.chart.height);
+                            gradient.addColorStop(0, 'rgba(239,68,68,0.25)');
+                            gradient.addColorStop(1, 'rgba(239,68,68,0.01)');
+                            return gradient;
+                        },
+                        borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
+                        pointBackgroundColor: '#ef4444', pointBorderColor: '#fff', pointBorderWidth: 2,
+                        fill: true, tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { grid: { color: c.grid }, ticks: { color: c.text, maxTicksLimit: 5 } },
+                        x: { grid: { color: c.grid }, ticks: { color: c.text } },
                         y: { grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 }, min: 0 }
                     },
-                    plugins: { legend: { display: false } }
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} violation${ctx.parsed.y !== 1 ? 's' : ''}` } }
+                    }
                 }
             });
         }
 
-        // ---- Build violations-by-bay bar ----
+        // ---- Violations by bay bar ----
         function buildViolBar(bayLabels, bayViolCounts) {
             const c = chartColors();
             const ctx = document.getElementById('violationsBar').getContext('2d');
             if (violBarChart) {
                 violBarChart.data.labels = bayLabels;
                 violBarChart.data.datasets[0].data = bayViolCounts;
-                violBarChart.update('none');
-                return;
+                violBarChart.update('none'); return;
             }
             violBarChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: bayLabels,
                     datasets: [{
-                        label: 'Violations',
-                        data: bayViolCounts,
-                        backgroundColor: 'rgba(239,68,68,0.7)',
-                        borderRadius: 6,
-                        borderWidth: 0,
+                        label: 'Violations', data: bayViolCounts,
+                        backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 6, borderWidth: 0
                     }]
                 },
                 options: {
@@ -421,26 +631,104 @@
             });
         }
 
-        // ---- Render sensor grid ----
+        // ---- Fees collected bar chart ----
+        function buildFeeChart() {
+            const c = chartColors();
+            const ctx = document.getElementById('feeChart').getContext('2d');
+            if (feeChart) {
+                feeChart.data.labels = feeHistory.map(p => p.label);
+                feeChart.data.datasets[0].data = feeHistory.map(p => p.value);
+                feeChart.update('none'); return;
+            }
+            feeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: feeHistory.map(p => p.label),
+                    datasets: [{
+                        label: 'Fees (RM)', data: feeHistory.map(p => p.value),
+                        backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 6, borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: c.text } },
+                        y: {
+                            grid: { color: c.grid },
+                            ticks: { color: c.text, callback: v => 'RM' + v }, min: 0
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: c => ` RM${c.parsed.y}` } }
+                    }
+                }
+            });
+        }
+
+        // ---- Peak hours bar chart (operating hours 06:00–18:00 only) ----
+        function buildPeakChart() {
+            const c = chartColors();
+            const ctx = document.getElementById('peakChart').getContext('2d');
+            // Filter to operating hours only (06–17)
+            const opHours = peakHoursData.filter(p => {
+                const h = parseInt(p.label);
+                return h >= 6 && h < 18;
+            });
+            const values = opHours.map(p => p.value);
+            const max = Math.max(...values, 0);
+            const bays = window.BAYS || [];
+            const colors = values.map(v => v > 0 && v === max
+                ? 'rgba(239,68,68,0.9)' : 'rgba(99,102,241,0.6)');
+
+            if (peakChart) {
+                peakChart.data.labels = opHours.map(p => p.label);
+                peakChart.data.datasets[0].data = values;
+                peakChart.data.datasets[0].backgroundColor = colors;
+                peakChart.update('none'); return;
+            }
+            peakChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: opHours.map(p => p.label),
+                    datasets: [{
+                        label: 'Avg occupied', data: values,
+                        backgroundColor: colors,
+                        borderRadius: 5, borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: c.text } },
+                        y: {
+                            grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 },
+                            min: 0, max: bays.length || 8,
+                            title: { display: true, text: 'Bays', color: c.text, font: { size: 11 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => ` Avg ${ctx.parsed.y} bays occupied` } }
+                    }
+                }
+            });
+        }
+
+        // ---- Sensor grid ----
         function renderSensorGrid() {
             const grid = document.getElementById('sensorGrid');
             const bays = window.BAYS || [];
             if (!bays.length) return;
-
             let html = '';
             bays.forEach(bay => {
-                const session = (window.activeSessions || {})[bay.id];
+                const session = (window.activeSessions || {})[String(bay.id)];
                 let statusClass = 'online', statusText = 'Available';
-
                 if (session) {
                     const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
-                    if (elapsed > bay.maxMinutes) {
-                        statusClass = 'violation'; statusText = 'Violation';
-                    } else {
-                        statusClass = 'occupied'; statusText = 'Occupied';
-                    }
+                    statusClass = elapsed > bay.maxMinutes ? 'violation' : 'occupied';
+                    statusText = elapsed > bay.maxMinutes ? 'Violation' : 'Occupied';
                 }
-
                 html += `
                     <div class="sensor-item">
                         <div class="sensor-id">${bay.sensorId.replace('SENSOR_', 'S-')}</div>
@@ -451,25 +739,21 @@
                         <div style="font-size:0.7rem;color:var(--text-secondary);">${bay.type} limit</div>
                     </div>`;
             });
-
             grid.innerHTML = html;
             document.getElementById('sensorLastUpdate').textContent =
                 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        // ---- Render violation history table ----
+        // ---- Violation history table ----
         function renderViolationHistory() {
             const tbody = document.getElementById('violationHistoryTable');
             const allViolations = window.violations || [];
-
-            document.getElementById('violationHistoryCount').textContent = `${allViolations.length} record${allViolations.length !== 1 ? 's' : ''}`;
-
+            document.getElementById('violationHistoryCount').textContent =
+                `${allViolations.length} record${allViolations.length !== 1 ? 's' : ''}`;
             if (!allViolations.length) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No violations recorded yet</td></tr>';
                 return;
             }
-
-            // Most recent first
             const sorted = [...allViolations].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             tbody.innerHTML = sorted.map(v => {
                 const fee = 30 + (Math.max(0, Math.ceil(v.overstayMinutes / 60) - 1) * 10);
@@ -477,100 +761,232 @@
                 const badge = v.compounded
                     ? '<span class="compounded-badge">Compounded</span>'
                     : '<span class="pending-badge">Pending</span>';
-                return `
-                    <tr class="violation-row ${v.compounded ? '' : 'table-danger'}">
-                        <td class="fw-bold">${v.bayNumber}</td>
-                        <td class="text-muted">${v.bayLocation}</td>
-                        <td>+${v.overstayMinutes} min</td>
-                        <td>RM${fee}</td>
-                        <td class="text-muted">${time}</td>
-                        <td>${badge}</td>
-                    </tr>`;
+                return `<tr class="violation-row ${v.compounded ? '' : 'table-danger'}">
+                    <td class="fw-bold">${v.bayNumber}</td>
+                    <td class="text-muted">${v.bayLocation}</td>
+                    <td>+${v.overstayMinutes} min</td>
+                    <td>RM${fee}</td>
+                    <td class="text-muted">${time}</td>
+                    <td>${badge}</td></tr>`;
             }).join('');
         }
 
-        // ---- Main update function (called on Firebase data change) ----
+        // ---- Main update (live Firebase push) ----
         function updateDashboard() {
-            const sessions   = window.activeSessions || {};
-            const allViol    = window.violations || [];
-            const bays       = window.BAYS || [];
+            const sessions = window.activeSessions || {};
+            const allViol = window.violations || [];
+            const bays = window.BAYS || [];
 
-            const occupied  = Object.keys(sessions).length;
-            const total     = bays.length;
+            const occupied = Object.keys(sessions).length;
+            const total = bays.length;
             const available = total - occupied;
             const activeViol = allViol.filter(v => !v.compounded).length;
             const compounded = allViol.filter(v => v.compounded).length;
             const fees = allViol.filter(v => v.compounded)
                 .reduce((sum, v) => sum + 30 + (Math.max(0, Math.ceil(v.overstayMinutes / 60) - 1) * 10), 0);
 
-            // Count violation bays
             let violBays = 0;
             bays.forEach(bay => {
-                const s = sessions[bay.id];
+                const s = sessions[String(bay.id)];
                 if (s && (Date.now() - s.startTime) > bay.maxMinutes * 60000) violBays++;
             });
 
             // KPIs
-            document.getElementById('kpiTotal').textContent    = total;
+            document.getElementById('kpiTotal').textContent = total;
             document.getElementById('kpiOccupied').textContent = occupied;
             document.getElementById('kpiViolations').textContent = activeViol;
-            document.getElementById('kpiFees').textContent     = `RM${fees}`;
+            document.getElementById('kpiFees').textContent = `RM${fees}`;
             document.getElementById('kpiOccupancyPct').textContent = total ? Math.round((occupied / total) * 100) + '%' : '0%';
             document.getElementById('kpiCompounded').textContent = compounded;
 
-            // Donut — clamp to 0 to avoid negative values when all occupied bays are violations
-            buildDonut(
-                Math.max(0, available),
-                Math.max(0, occupied - violBays),
-                violBays
-            );
+            // Donut
+            buildDonut(Math.max(0, available), Math.max(0, occupied - violBays), violBays);
 
-            // Append time-series point
-            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            occupancyHistory.push({ label: now, value: occupied });
-            if (occupancyHistory.length > MAX_POINTS) occupancyHistory.shift();
-
-            violationHistory.push({ label: now, value: allViol.length });
-            if (violationHistory.length > MAX_POINTS) violationHistory.shift();
-
+            // Historical charts — only render, don't re-append live ticks
             buildOccupancyLine();
             buildViolLine();
+            buildFeeChart();
+            buildPeakChart();
 
-            // Violations by bay
+            // Violations by bay — merge historical + live
             const bayLabels = bays.map(b => b.number);
-            const bayViolCounts = bays.map(b => allViol.filter(v => Number(v.bayId) === b.id).length);
+            const bayViolCounts = bays.map((b, i) => {
+                const liveCount = allViol.filter(v => Number(v.bayId) === b.id).length;
+                const histCount = violByBayData[i] || 0;
+                return Math.max(liveCount, histCount);
+            });
             buildViolBar(bayLabels, bayViolCounts);
 
-            // Sensor grid & table
             renderSensorGrid();
             renderViolationHistory();
         }
 
-        // ---- Hook into app.js Firebase listeners via custom event ----
-        // app.js dispatches 'parkingDataUpdated' on every Firebase push — no fragile override needed
+        // ---- Load 7-day historical data from Firebase ----
+        async function loadHistoricalData() {
+            if (!window.firebaseDB) {
+                setTimeout(loadHistoricalData, 800);
+                return;
+            }
+
+            const bays = window.BAYS || [];
+
+            try {
+                const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+                // ---- Snapshots — aggregate by day ----
+                const snapSnap = await window.firebaseDB
+                    .ref('history/snapshots')
+                    .orderByChild('timestamp')
+                    .startAt(cutoff)
+                    .once('value');
+
+                const snapData = snapSnap.val() || {};
+                const snapPoints = Object.values(snapData).sort((a, b) => a.timestamp - b.timestamp);
+
+                if (snapPoints.length > 0) {
+                    // Group snapshots by date string — ONLY during operating hours (06:00–17:59)
+                    const byDay = {};
+                    snapPoints.forEach(p => {
+                        const dt = new Date(p.timestamp);
+                        const h = dt.getHours();
+                        if (h < 6 || h >= 18) return; // skip non-operating hours
+                        const day = dt.toISOString().split('T')[0];
+                        if (!byDay[day]) byDay[day] = { occupied: [], violations: [] };
+                        byDay[day].occupied.push(p.occupied);
+                        byDay[day].violations.push(p.violations);
+                    });
+
+                    const days = Object.keys(byDay).sort();
+
+                    // Occupancy: average occupied per day (operating hours only)
+                    occupancyHistory = days.map(day => ({
+                        label: new Date(day + 'T12:00:00').toLocaleDateString('en-MY', { weekday: 'short', month: 'short', day: 'numeric' }),
+                        value: parseFloat((byDay[day].occupied.reduce((s, v) => s + v, 0) / byDay[day].occupied.length).toFixed(1))
+                    }));
+
+                    // Peak hours — group by hour across all 7 days (operating hours only)
+                    const hourBuckets = Array(24).fill(0);
+                    const hourCounts = Array(24).fill(0);
+                    snapPoints.forEach(p => {
+                        const h = new Date(p.timestamp).getHours();
+                        if (h < 6 || h >= 18) return;
+                        hourBuckets[h] += p.occupied;
+                        hourCounts[h]++;
+                    });
+                    peakHoursData = hourBuckets.map((total, h) => ({
+                        label: `${String(h).padStart(2, '0')}:00`,
+                        value: hourCounts[h] ? parseFloat((total / hourCounts[h]).toFixed(1)) : 0
+                    }));
+
+                    violByBayData = bays.map(() => 0); // will be enriched from violations node below
+
+                } else {
+                    peakHoursData = Array.from({ length: 24 }, (_, h) => ({
+                        label: `${String(h).padStart(2, '0')}:00`, value: 0
+                    }));
+                }
+
+                // ---- Daily summary — fees + violations + sessions ----
+                const dailySnap = await window.firebaseDB
+                    .ref('dailySummary')
+                    .orderByKey()
+                    .limitToLast(7)
+                    .once('value');
+
+                const dailyData = dailySnap.val() || {};
+                const sortedDays = Object.values(dailyData).sort((a, b) =>
+                    (a.date || '') > (b.date || '') ? 1 : -1);
+
+                feeHistory = sortedDays.map(d => ({
+                    label: new Date(d.date + 'T12:00:00').toLocaleDateString('en-MY', {
+                        weekday: 'short', month: 'short', day: 'numeric'
+                    }),
+                    value: d.feesCollected || 0
+                }));
+
+                // BUG FIX: Use dailySummary.totalViolations for the violations chart
+                // (snapshot violations field is per-snapshot count, not daily total)
+                violationHistory = sortedDays.map(d => ({
+                    label: new Date(d.date + 'T12:00:00').toLocaleDateString('en-MY', {
+                        weekday: 'short', month: 'short', day: 'numeric'
+                    }),
+                    value: d.totalViolations || 0
+                }));
+
+                // Historical KPI totals
+                const hist7Sessions = sortedDays.reduce((s, d) => s + (d.totalSessions || 0), 0);
+                const hist7Violations = sortedDays.reduce((s, d) => s + (d.totalViolations || 0), 0);
+                const hist7Fees = sortedDays.reduce((s, d) => s + (d.feesCollected || 0), 0);
+
+                const kpiSessions = document.getElementById('kpiSessions');
+                const kpiHistViol = document.getElementById('kpiHistViolations');
+                const kpiHistFees = document.getElementById('kpiHistFees');
+                if (kpiSessions) kpiSessions.textContent = hist7Sessions;
+                if (kpiHistViol) kpiHistViol.textContent = hist7Violations;
+                if (kpiHistFees) kpiHistFees.textContent = `RM${hist7Fees.toLocaleString()}`;
+
+                if (feeHistory.length === 0) {
+                    feeHistory = Array.from({ length: 7 }, (_, i) => {
+                        const d = new Date();
+                        d.setDate(d.getDate() - (6 - i));
+                        return {
+                            label: d.toLocaleDateString('en-MY', { weekday: 'short', month: 'short', day: 'numeric' }),
+                            value: 0
+                        };
+                    });
+                }
+
+                // ---- Violations by bay — read from /violations node ----
+                const violSnap = await window.firebaseDB
+                    .ref('violations')
+                    .once('value');
+
+                const violData = violSnap.val() || {};
+                violByBayData = bays.map(bay =>
+                    Object.values(violData).filter(v => Number(v.bayId) === bay.id).length
+                );
+
+                historicalLoaded = true;
+                console.log('[Dashboard] Historical data loaded:', {
+                    snapshots: snapData ? Object.keys(snapData).length : 0,
+                    days: sortedDays.length,
+                    violations: Object.keys(violData).length
+                });
+
+            } catch (e) {
+                console.warn('[Dashboard] Could not load historical data:', e);
+                peakHoursData = Array.from({ length: 24 }, (_, h) => ({
+                    label: `${String(h).padStart(2, '0')}:00`, value: 0
+                }));
+                feeHistory = [];
+                violByBayData = bays.map(() => 0);
+                historicalLoaded = true;
+            }
+
+            updateDashboard();
+        }
+
+        // ---- Hook into Firebase push events ----
         window.addEventListener('parkingDataUpdated', updateDashboard);
 
-        // Initial render once app.js has initialised
+        // ---- Boot ----
         $(document).ready(() => {
-            // Initial render — give app.js a moment to boot and attach Firebase listeners
-            setTimeout(updateDashboard, 500);
-            // Further updates are driven by the parkingDataUpdated event fired from app.js
+            setTimeout(loadHistoricalData, 600);
         });
 
-        // Listen for commands from parent shell
+        // ---- Shell messages ----
         window.addEventListener('message', (e) => {
             if (!e.data || !e.data.type) return;
-            if (e.data.type === 'refresh') updateDashboard();
+            if (e.data.type === 'refresh') loadHistoricalData();
             if (e.data.type === 'theme') {
                 document.documentElement.setAttribute('data-theme', e.data.value);
-                // Rebuild charts with new colours
-                if (donutChart)    { donutChart.destroy();    donutChart    = null; }
-                if (lineChart)     { lineChart.destroy();     lineChart     = null; }
-                if (violLineChart) { violLineChart.destroy(); violLineChart = null; }
-                if (violBarChart)  { violBarChart.destroy();  violBarChart  = null; }
+                [donutChart, lineChart, violLineChart, violBarChart, feeChart, peakChart]
+                    .forEach(ch => { if (ch) ch.destroy(); });
+                donutChart = lineChart = violLineChart = violBarChart = feeChart = peakChart = null;
                 updateDashboard();
             }
         });
     </script>
 </body>
+
 </html>

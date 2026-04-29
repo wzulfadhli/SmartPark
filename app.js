@@ -23,6 +23,8 @@ const FIREBASE_CONFIG = {
 let firebaseDB = null;
 let sessionsRef = null;
 let violationsRef = null;
+let historyRef = null;
+let dailySummaryRef = null;
 
 // IndexedDB for offline fallback
 let db;
@@ -112,11 +114,13 @@ const bays = [
 // Exposed on window so dashboard.html (same origin iframe) can read them
 let activeSessions = {};
 let violations = [];
+let enforcerAlerts = [];
 
-// Expose bay config and state as window globals for cross-page reads
+// Expose bay config, state, and Firebase refs as window globals for cross-page reads
 window.BAYS = bays;
+window.firebaseDB = null; // set after initFirebase
 Object.defineProperty(window, 'activeSessions', { get: () => activeSessions, set: v => { activeSessions = v; } });
-Object.defineProperty(window, 'violations', { get: () => violations, set: v => { violations = v; } });
+Object.defineProperty(window, 'violations',     { get: () => violations,     set: v => { violations = v; } });
 
 // ============================================================
 // FIREBASE INIT & REALTIME LISTENERS
@@ -126,8 +130,11 @@ function initFirebase() {
     try {
         firebase.initializeApp(FIREBASE_CONFIG);
         firebaseDB = firebase.database();
+        window.firebaseDB = firebaseDB;
         sessionsRef = firebaseDB.ref('activeSessions');
         violationsRef = firebaseDB.ref('violations');
+        historyRef = firebaseDB.ref('history/snapshots');
+        dailySummaryRef = firebaseDB.ref('dailySummary');
 
         // Listen for real-time session changes from ANY device
         sessionsRef.on('value', (snapshot) => {
@@ -206,6 +213,7 @@ async function initializeApp() {
 
     startTimers();
     startEnforcerCheck();
+    startHistoricalSnapshots();
     setupPushNotifications();
     setupBackgroundSync();
     updateThemeIcon();
@@ -304,7 +312,7 @@ function renderBays() {
     grid.empty();
 
     bays.forEach(bay => {
-        const session = activeSessions[String(bay.id)];
+        const session = activeSessions[bay.id];
         let statusClass = 'bay-available';
 
         if (session) {
@@ -333,7 +341,7 @@ function renderBays() {
 }
 
 async function toggleBay(bayId) {
-    if (activeSessions[String(bayId)]) {
+    if (activeSessions[bayId]) {
         await endParkingSession(bayId);
     } else {
         await startParkingSession(bayId);
@@ -354,8 +362,8 @@ async function startParkingSession(bayId) {
         status: 'active'
     };
 
-    // Write to Firebase — coerce bayId to string to match Firebase key format
-    activeSessions[String(bayId)] = session;
+    // Write to Firebase — all devices will see this instantly via the listener
+    activeSessions[bayId] = session;
     await syncSessionsToFirebase();
 
     // Also persist locally for offline support
@@ -366,10 +374,10 @@ async function startParkingSession(bayId) {
 }
 
 async function endParkingSession(bayId) {
-    const session = activeSessions[String(bayId)];
+    const session = activeSessions[bayId];
     if (!session) return;
 
-    const bay = bays.find(b => b.id === parseInt(bayId));
+    const bay = bays.find(b => b.id === bayId);
     const duration = Math.floor((Date.now() - session.startTime) / 60000);
 
     if (duration > bay.maxMinutes) {
@@ -383,34 +391,11 @@ async function endParkingSession(bayId) {
     session.duration = duration;
     await saveOfflineData('parkingSessions', session);
 
-    delete activeSessions[String(bayId)];
+    delete activeSessions[bayId];
 
     // Push deletion to Firebase — all devices update instantly
     await syncSessionsToFirebase();
-
-    // Auto-dismiss any pending violation for this bay — car has left
-    if (violationsRef) {
-        try {
-            const snapshot = await violationsRef
-                .orderByChild('bayId')
-                .equalTo(String(bayId))
-                .once('value');
-            if (snapshot.val()) {
-                Object.entries(snapshot.val()).forEach(([key, v]) => {
-                    if (!v.compounded) {
-                        violationsRef.child(key).update({
-                            status: 'dismissed',
-                            compounded: true,
-                            dismissedAt: new Date().toISOString(),
-                            dismissReason: 'vehicle_left'
-                        });
-                    }
-                });
-            }
-        } catch (e) {
-            console.warn('[Firebase] Could not dismiss violation on session end:', e);
-        }
-    }
+    await incrementDailySessions();
 
     if ('vibrate' in navigator) navigator.vibrate([50, 50, 50]);
 }
@@ -464,7 +449,7 @@ async function triggerEnforcerAlert(bayId) {
     const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
     const overstay = elapsed - bay.maxMinutes;
 
-    try { document.getElementById('alertSound').play(); } catch (e) { }
+    try { document.getElementById('alertSound').play(); } catch (e) {}
     if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 200]);
 
     const violation = {
@@ -480,10 +465,12 @@ async function triggerEnforcerAlert(bayId) {
     };
 
     violations.push(violation);
+    enforcerAlerts.push(violation);
 
     // Sync violation to Firebase — all devices see it
     await syncViolationToFirebase(violation);
     await saveOfflineData('violations', violation);
+    await incrementDailyViolations();
 
     if ('Notification' in window && Notification.permission === 'granted') {
         const registration = await navigator.serviceWorker.ready;
@@ -550,6 +537,7 @@ async function compoundViolation(violationId) {
     await saveOfflineData('violations', violation);
 
     const fee = calculateCompoundFee(violation.overstayMinutes);
+    await incrementDailyFees(fee);
     showNotification(`✅ Bay ${violation.bayNumber} compounded! Fee: RM${fee}`, 'success');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
@@ -559,10 +547,6 @@ async function compoundViolation(violationId) {
 
 async function compoundAllViolations() {
     const pendingViolations = violations.filter(v => !v.compounded);
-    if (pendingViolations.length === 0) {
-        showNotification('No pending violations to compound', 'info');
-        return;
-    }
     for (let violation of pendingViolations) {
         violation.compounded = true;
         violation.status = 'compounded';
@@ -575,6 +559,79 @@ async function compoundAllViolations() {
     }
     updateEnforcerPanel();
     updateStats();
+}
+
+
+// ============================================================
+// HISTORICAL DATA — snapshots every 5 min, daily summaries
+// ============================================================
+
+function startHistoricalSnapshots() {
+    writeSnapshot();
+    setInterval(writeSnapshot, 5 * 60 * 1000);
+}
+
+async function writeSnapshot() {
+    if (!historyRef) return;
+    const occupied         = Object.keys(activeSessions).length;
+    const available        = bays.length - occupied;
+    const activeViolations = violations.filter(v => !v.compounded).length;
+    const now  = new Date();
+    const key  = now.toISOString().replace(/[:.]/g, '-');
+
+    try {
+        await historyRef.child(key).set({
+            timestamp: now.getTime(),
+            occupied,
+            available,
+            violations: activeViolations,
+            total: bays.length
+        });
+
+        // Auto-prune snapshots older than 7 days
+        const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        const old = await historyRef
+            .orderByChild('timestamp')
+            .endAt(cutoff)
+            .once('value');
+        if (old.val()) {
+            const updates = {};
+            Object.keys(old.val()).forEach(k => updates[k] = null);
+            await historyRef.update(updates);
+        }
+    } catch (e) {
+        console.warn('[Firebase] Snapshot write failed:', e);
+    }
+}
+
+async function incrementDailySessions() {
+    if (!dailySummaryRef) return;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+        await dailySummaryRef.child(`${today}/totalSessions`)
+            .transaction(v => (v || 0) + 1);
+    } catch (e) { console.warn('[Firebase] incrementDailySessions failed:', e); }
+}
+
+async function incrementDailyViolations() {
+    if (!dailySummaryRef) return;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+        await dailySummaryRef.child(`${today}/totalViolations`)
+            .transaction(v => (v || 0) + 1);
+        // Ensure date field exists for sorting
+        await dailySummaryRef.child(`${today}/date`).transaction(v => v || today);
+    } catch (e) { console.warn('[Firebase] incrementDailyViolations failed:', e); }
+}
+
+async function incrementDailyFees(fee) {
+    if (!dailySummaryRef) return;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+        await dailySummaryRef.child(`${today}/feesCollected`)
+            .transaction(v => (v || 0) + fee);
+        await dailySummaryRef.child(`${today}/date`).transaction(v => v || today);
+    } catch (e) { console.warn('[Firebase] incrementDailyFees failed:', e); }
 }
 
 // ============================================================
@@ -694,6 +751,7 @@ async function resetAllBays() {
 
     activeSessions = {};
     violations = [];
+    enforcerAlerts = [];
 
     // Clear Firebase
     if (sessionsRef) await sessionsRef.set(null);
@@ -717,8 +775,6 @@ function updateAll() {
     updateStats();
     updateActiveSessionsTable();
     updateEnforcerPanel();
-    // Notify other scripts (e.g. dashboard.html) that data has changed
-    window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
 }
 
 function startTimers() {
