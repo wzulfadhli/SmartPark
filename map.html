@@ -552,7 +552,13 @@
                     weight: 2,
                     opacity: 0.3,
                     fillOpacity: 0.1
-                }).addTo(map);
+                }).addTo(map).bindPopup(
+                    `<b>${zone.name}</b><br>
+                     Total Lots: ${zone.totalLots}<br>
+                     Active Sessions: ${activeInZone}<br>
+                     Compliance: ${complianceRate.toFixed(1)}%<br>
+                     Status: ${style.text}`
+                );
 
                 zoneMarkers.push(marker, geofence);
 
