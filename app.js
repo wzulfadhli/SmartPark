@@ -1,29 +1,49 @@
-// Parking System Core Logic
-const APP_VERSION = '1.0.0';
-const DB_NAME = 'SmartParkingDB';
-
 // ============================================================
-// FIREBASE CONFIGURATION
-// Replace the values below with your own Firebase project config.
-// Go to: https://console.firebase.google.com → Your Project →
-// Project Settings → Your Apps → Firebase SDK snippet → Config
+// GPS/Geofencing Parking System Core Logic
 // ============================================================
-const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyBiOLREiC_2EvhVuaLu9duJGedYxvM1yg8",
-    authDomain: "smartpark-26.firebaseapp.com",
-    databaseURL: "https://smartpark-26-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "smartpark-26",
-    storageBucket: "smartpark-26.firebasestorage.app",
-    messagingSenderId: "259377487081",
-    appId: "1:259377487081:web:bf424b51abb59ca7c32478"
-};
+// This system replaces physical parking sensors with GPS-based
+// geofencing and payment session tracking. Occupancy is now
+// determined by active payment sessions within geofenced zones.
 // ============================================================
 
-// Firebase references (set after init)
+const APP_VERSION = '2.0.0';
+const DB_NAME = 'SmartParkingDB_GPS';
+
+// ============================================================
+// DUMMY DATA MODE (for testing without Firebase)
+// ============================================================
+const USE_DUMMY_DATA = true; // Set to false to use real Firebase data
+
+// Load Firebase configuration from separate file
+// In production, this would be loaded from environment variables
+let FIREBASE_CONFIG;
+try {
+    FIREBASE_CONFIG = {
+        apiKey: process?.env?.FIREBASE_API_KEY || "YOUR_API_KEY",
+        authDomain: process?.env?.FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
+        projectId: process?.env?.FIREBASE_PROJECT_ID || "your-project-id",
+        storageBucket: process?.env?.FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
+        messagingSenderId: process?.env?.FIREBASE_MESSAGING_SENDER_ID || "123456789",
+        appId: process?.env?.FIREBASE_APP_ID || "1:123456789:web:abcdef123456"
+    };
+} catch (e) {
+    console.warn('[Config] Using default Firebase config - please update with your credentials');
+    FIREBASE_CONFIG = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "your-project.firebaseapp.com",
+        projectId: "your-project-id",
+        storageBucket: "your-project.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:abcdef123456"
+    };
+}
+
+// Firebase Firestore references (set after init)
 let firebaseDB = null;
-let sessionsRef = null;
-let violationsRef = null;
-let historyRef = null;
+let firestore = null;
+let zonesRef = null;
+let paymentSessionsRef = null;
+let complianceSnapshotsRef = null;
 let dailySummaryRef = null;
 
 // IndexedDB for offline fallback
@@ -31,7 +51,7 @@ let db;
 
 function initDatabase() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 2);
+        const request = indexedDB.open(DB_NAME, 3);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
             db = request.result;
@@ -39,20 +59,28 @@ function initDatabase() {
         };
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains('parkingSessions')) {
-                const s = db.createObjectStore('parkingSessions', { keyPath: 'id', autoIncrement: true });
-                s.createIndex('bayId', 'bayId', { unique: false });
+            // Payment sessions store (replaces old parkingSessions)
+            if (!db.objectStoreNames.contains('paymentSessions')) {
+                const s = db.createObjectStore('paymentSessions', { keyPath: 'sessionId' });
+                s.createIndex('zoneId', 'zoneId', { unique: false });
                 s.createIndex('status', 'status', { unique: false });
+                s.createIndex('startTime', 'startTime', { unique: false });
             }
-            if (!db.objectStoreNames.contains('violations')) {
-                const v = db.createObjectStore('violations', { keyPath: 'id', autoIncrement: true });
-                v.createIndex('bayId', 'bayId', { unique: false });
-                v.createIndex('status', 'status', { unique: false });
-                v.createIndex('timestamp', 'timestamp', { unique: false });
+            // Zones store for offline zone definitions
+            if (!db.objectStoreNames.contains('zones')) {
+                const z = db.createObjectStore('zones', { keyPath: 'id' });
             }
+            // Compliance snapshots store
+            if (!db.objectStoreNames.contains('complianceSnapshots')) {
+                const c = db.createObjectStore('complianceSnapshots', { keyPath: 'id', autoIncrement: true });
+                c.createIndex('zoneId', 'zoneId', { unique: false });
+                c.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+            // Offline queue for sync
             if (!db.objectStoreNames.contains('offlineQueue')) {
                 db.createObjectStore('offlineQueue', { keyPath: 'id', autoIncrement: true });
             }
+            // Push subscriptions
             if (!db.objectStoreNames.contains('pushSubscriptions')) {
                 db.createObjectStore('pushSubscriptions', { keyPath: 'id', autoIncrement: true });
             }
@@ -98,60 +126,82 @@ async function loadOfflineData(storeName) {
     });
 }
 
-// Parking Bay Configuration
-const bays = [
-    { id: 1, number: 'A01', type: '2 min', maxMinutes: 2, sensorId: 'SENSOR_001', location: 'Level 1' },
-    { id: 2, number: 'A02', type: '2 min', maxMinutes: 2, sensorId: 'SENSOR_002', location: 'Level 1' },
-    { id: 3, number: 'A03', type: '5 min', maxMinutes: 5, sensorId: 'SENSOR_003', location: 'Level 1' },
-    { id: 4, number: 'A04', type: '5 min', maxMinutes: 5, sensorId: 'SENSOR_004', location: 'Level 1' },
-    { id: 5, number: 'B01', type: '2 min', maxMinutes: 2, sensorId: 'SENSOR_005', location: 'Level 2' },
-    { id: 6, number: 'B02', type: '2 min', maxMinutes: 2, sensorId: 'SENSOR_006', location: 'Level 2' },
-    { id: 7, number: 'B03', type: '5 min', maxMinutes: 5, sensorId: 'SENSOR_007', location: 'Level 2' },
-    { id: 8, number: 'B04', type: '5 min', maxMinutes: 5, sensorId: 'SENSOR_008', location: 'Level 2' }
-];
+// ============================================================
+// ZONE CONFIGURATION (replaces old Parking Bay Configuration)
+// ============================================================
+// These are geofenced parking zones. In production, these would
+// be loaded from Firestore. This replaces the sensor-based bays.
+// ============================================================
 
-// Local state — always kept in sync with Firebase
-// Exposed on window so dashboard.html (same origin iframe) can read them
-let activeSessions = {};
-let violations = [];
-let enforcerAlerts = [];
+let zones = [];
+let paymentSessions = [];
+let complianceSnapshots = [];
 
-// Expose bay config, state, and Firebase refs as window globals for cross-page reads
-window.BAYS = bays;
+// Compliance thresholds (configurable)
+const COMPLIANCE_THRESHOLDS = {
+    HIGH: 80,    // >= 80% = Green
+    MEDIUM: 50   // 50-79% = Orange, < 50% = Red
+};
+
+// Expose zones, payment sessions, and Firebase refs as window globals
+window.ZONES = zones;
+window.PAYMENT_SESSIONS = paymentSessions;
+window.COMPLIANCE_SNAPSHOTS = complianceSnapshots;
 window.firebaseDB = null; // set after initFirebase
-Object.defineProperty(window, 'activeSessions', { get: () => activeSessions, set: v => { activeSessions = v; } });
-Object.defineProperty(window, 'violations',     { get: () => violations,     set: v => { violations = v; } });
+Object.defineProperty(window, 'zones', { get: () => zones, set: v => { zones = v; } });
+Object.defineProperty(window, 'paymentSessions', { get: () => paymentSessions, set: v => { paymentSessions = v; } });
+Object.defineProperty(window, 'complianceSnapshots', { get: () => complianceSnapshots, set: v => { complianceSnapshots = v; } });
 
 // ============================================================
-// FIREBASE INIT & REALTIME LISTENERS
+// FIREBASE INIT & REALTIME LISTENERS (Firestore)
 // ============================================================
 
 function initFirebase() {
     try {
         firebase.initializeApp(FIREBASE_CONFIG);
-        firebaseDB = firebase.database();
-        window.firebaseDB = firebaseDB;
-        sessionsRef = firebaseDB.ref('activeSessions');
-        violationsRef = firebaseDB.ref('violations');
-        historyRef = firebaseDB.ref('history/snapshots');
-        dailySummaryRef = firebaseDB.ref('dailySummary');
+        firestore = firebase.firestore();
+        window.firebaseDB = firestore;
 
-        // Listen for real-time session changes from ANY device
-        sessionsRef.on('value', (snapshot) => {
-            const data = snapshot.val() || {};
-            activeSessions = data;
+        // Firestore collection references
+        zonesRef = firestore.collection('zones');
+        paymentSessionsRef = firestore.collection('paymentSessions');
+        complianceSnapshotsRef = firestore.collection('complianceSnapshots');
+        dailySummaryRef = firestore.collection('dailySummary');
+
+        // Listen for real-time zone changes
+        zonesRef.onSnapshot((snapshot) => {
+            zones = [];
+            snapshot.forEach(doc => {
+                zones.push({ id: doc.id, ...doc.data() });
+            });
             updateAll();
         });
 
-        // Listen for real-time violation changes from ANY device
-        violationsRef.on('value', (snapshot) => {
-            const data = snapshot.val();
-            violations = data ? Object.values(data) : [];
-            updateEnforcerPanel();
-            updateStats();
-        });
+        // Listen for real-time payment session changes
+        paymentSessionsRef
+            .where('status', '==', 'active')
+            .onSnapshot((snapshot) => {
+                paymentSessions = [];
+                snapshot.forEach(doc => {
+                    paymentSessions.push({ sessionId: doc.id, ...doc.data() });
+                });
+                calculateAndStoreCompliance();
+                updateAll();
+            });
 
-        console.log('[Firebase] Realtime listeners attached');
+        // Listen for real-time compliance snapshot changes
+        complianceSnapshotsRef
+            .orderBy('timestamp', 'desc')
+            .limit(100)
+            .onSnapshot((snapshot) => {
+                complianceSnapshots = [];
+                snapshot.forEach(doc => {
+                    complianceSnapshots.push({ id: doc.id, ...doc.data() });
+                });
+                window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+            });
+
+        console.log('[Firebase] Firestore realtime listeners attached');
         return true;
     } catch (err) {
         console.error('[Firebase] Init failed:', err);
@@ -160,32 +210,31 @@ function initFirebase() {
     }
 }
 
-// Write active sessions to Firebase
-async function syncSessionsToFirebase() {
-    if (!sessionsRef) return;
+// Write a payment session to Firestore
+async function syncPaymentSessionToFirebase(session) {
+    if (!paymentSessionsRef) return;
     try {
-        await sessionsRef.set(activeSessions);
+        await paymentSessionsRef.doc(session.sessionId).set(session);
     } catch (err) {
-        console.error('[Firebase] Failed to sync sessions:', err);
-        // Fall back to offline queue
+        console.error('[Firebase] Failed to sync payment session:', err);
         await saveOfflineData('offlineQueue', {
-            action: 'syncSessions',
-            data: activeSessions,
+            action: 'syncPaymentSession',
+            data: session,
             timestamp: new Date().toISOString()
         });
     }
 }
 
-// Write a single violation to Firebase
-async function syncViolationToFirebase(violation) {
-    if (!violationsRef) return;
+// Write a compliance snapshot to Firestore
+async function syncComplianceSnapshotToFirebase(snapshot) {
+    if (!complianceSnapshotsRef) return;
     try {
-        await violationsRef.child(String(violation.id)).set(violation);
+        await complianceSnapshotsRef.add(snapshot);
     } catch (err) {
-        console.error('[Firebase] Failed to sync violation:', err);
+        console.error('[Firebase] Failed to sync compliance snapshot:', err);
         await saveOfflineData('offlineQueue', {
-            action: 'syncViolation',
-            data: violation,
+            action: 'syncComplianceSnapshot',
+            data: snapshot,
             timestamp: new Date().toISOString()
         });
     }
@@ -196,9 +245,21 @@ async function syncViolationToFirebase(violation) {
 // ============================================================
 
 async function initializeApp() {
-    console.log('Initializing Smart Parking PWA v' + APP_VERSION);
+    console.log('Initializing GPS/Geofencing Parking System v' + APP_VERSION);
 
     await initDatabase();
+
+    // Use dummy data if enabled
+    if (USE_DUMMY_DATA) {
+        console.log('[Demo] Using dummy data mode');
+        loadDummyData();
+        updateStats();
+        startComplianceCalculation();
+        showNotification('GPS Parking System Ready (Demo Mode)', 'success');
+        return;
+    }
+
+    // Otherwise, use Firebase
     const firebaseReady = initFirebase();
 
     // If Firebase isn't configured yet, fall back to cached local state
@@ -206,43 +267,91 @@ async function initializeApp() {
         await loadCachedState();
     }
 
-    renderBays();
-    updateStats();
-    updateActiveSessionsTable();
-    updateEnforcerPanel();
+    // Load sample zones if none exist (for demo purposes)
+    if (zones.length === 0) {
+        loadSampleZones();
+    }
 
-    startTimers();
-    startEnforcerCheck();
-    startHistoricalSnapshots();
+    updateStats();
+
+    startComplianceCalculation();
     setupPushNotifications();
     setupBackgroundSync();
     updateThemeIcon();
 
-    showNotification('Smart Parking System Ready', 'success');
+    showNotification('GPS Parking System Ready', 'success');
 }
 
 async function loadCachedState() {
     try {
-        const cachedSessions = await loadOfflineData('parkingSessions');
-        const cachedViolations = await loadOfflineData('violations');
+        const cachedSessions = await loadOfflineData('paymentSessions');
+        const cachedZones = await loadOfflineData('zones');
 
         if (cachedSessions.length > 0) {
-            cachedSessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            cachedSessions.forEach(session => {
-                if (session.status === 'active' && !activeSessions[session.bayId]) {
-                    activeSessions[session.bayId] = session;
-                }
-            });
+            paymentSessions = cachedSessions.filter(s => s.status === 'active');
         }
 
-        if (cachedViolations.length > 0) {
-            violations = cachedViolations.filter(v => !v.compounded);
+        if (cachedZones.length > 0) {
+            zones = cachedZones;
         }
 
-        console.log('Loaded cached data:', { sessions: cachedSessions.length, violations: cachedViolations.length });
+        console.log('Loaded cached data:', { sessions: cachedSessions.length, zones: cachedZones.length });
     } catch (error) {
         console.error('Failed to load cached data:', error);
     }
+}
+
+// Load dummy data for demo (in production, these come from Firestore)
+function loadDummyData() {
+    if (typeof DUMMY_ZONES !== 'undefined') {
+        zones = DUMMY_ZONES;
+        window.ZONES = DUMMY_ZONES;
+        console.log('[Demo] Loaded dummy zones:', zones.length);
+    }
+    if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+        paymentSessions = DUMMY_PAYMENT_SESSIONS;
+        window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+        console.log('[Demo] Loaded dummy payment sessions:', paymentSessions.length);
+    }
+}
+
+// Load sample zones for demo (in production, these come from Firestore)
+function loadSampleZones() {
+    zones = [
+        {
+            id: 'zone_ss15_4',
+            name: 'Jalan SS15/4',
+            center: { lat: 3.0765, lng: 101.5890 },
+            radius: 150,
+            totalLots: 50,
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'zone_ss15_8',
+            name: 'Jalan SS15/8',
+            center: { lat: 3.0750, lng: 101.5895 },
+            radius: 120,
+            totalLots: 40,
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'zone_usj10_taipan',
+            name: 'USJ 10 Taipan',
+            center: { lat: 3.0485, lng: 101.5850 },
+            radius: 200,
+            totalLots: 120,
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'zone_ss16_1',
+            name: 'Jalan SS16/1',
+            center: { lat: 3.0820, lng: 101.5865 },
+            radius: 180,
+            totalLots: 75,
+            createdAt: new Date().toISOString()
+        }
+    ];
+    console.log('[Demo] Loaded sample zones');
 }
 
 // ============================================================
@@ -304,333 +413,198 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // ============================================================
-// PARKING SESSION LOGIC
+// PAYMENT SESSION MANAGEMENT (replaces old Parking Session Logic)
 // ============================================================
 
-function renderBays() {
-    const grid = $('#baysGrid');
-    grid.empty();
-
-    bays.forEach(bay => {
-        const session = activeSessions[bay.id];
-        let statusClass = 'bay-available';
-
-        if (session) {
-            const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
-            statusClass = elapsed > bay.maxMinutes ? 'bay-violation' : 'bay-occupied';
-        }
-
-        const card = `
-            <div class="col-4 col-md-2 mb-2">
-                <div class="card bay-card ${statusClass} h-80" onclick="toggleBay(${bay.id})">
-                    <div class="status-dot" style="width: 8px; height: 8px;"></div>
-                    <div class="mb-1 text-muted small fw-bold" style="font-size: 0.65rem;">
-                        ${bay.location}-${bay.number}
-                    </div>
-                    <h3 class="mb-0 fw-bold" style="color: var(--text-primary); font-size: 1.3rem; letter-spacing: -1px;">
-                        ${bay.number}
-                    </h3>
-                    <div class="mt-auto pt-2 d-flex justify-content-between align-items-end">
-                        <small class="text-muted" style="font-size: 0.6rem;">${bay.location}<br>${bay.type}</small>
-                    </div>
-                </div>
-            </div>
-        `;
-        grid.append(card);
-    });
-}
-
-async function toggleBay(bayId) {
-    if (activeSessions[bayId]) {
-        await endParkingSession(bayId);
-    } else {
-        await startParkingSession(bayId);
+/**
+ * Create a new payment session
+ * This replaces the old sensor-based parking session start
+ * @param {string} zoneId - Zone ID where parking occurs
+ * @param {string} vehicleId - Vehicle identifier
+ * @param {Object} location - GPS coordinates {lat, lng}
+ * @param {number} durationMinutes - Parking duration in minutes
+ */
+async function createPaymentSession(zoneId, vehicleId, location, durationMinutes) {
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) {
+        showNotification('Invalid zone', 'danger');
+        return;
     }
-}
 
-async function startParkingSession(bayId) {
-    const bay = bays.find(b => b.id === bayId);
+    // Validate location is within geofence
+    if (!isWithinGeofence(location, zone)) {
+        showNotification('Location is outside the parking zone', 'danger');
+        return;
+    }
+
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
 
     const session = {
-        bayId: bayId,
-        bayNumber: bay.number,
-        bayType: bay.type,
-        maxMinutes: bay.maxMinutes,
-        startTime: Date.now(),
-        sensorId: bay.sensorId,
-        enforcerNotified: false,
-        status: 'active'
+        sessionId: sessionId,
+        zoneId: zoneId,
+        zoneName: zone.name,
+        vehicleId: vehicleId,
+        location: location,
+        startTime: now,
+        endTime: now + (durationMinutes * 60 * 1000),
+        durationMinutes: durationMinutes,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     };
 
-    // Write to Firebase — all devices will see this instantly via the listener
-    activeSessions[bayId] = session;
-    await syncSessionsToFirebase();
+    // Sync to Firestore
+    await syncPaymentSessionToFirebase(session);
+    await saveOfflineData('paymentSessions', session);
 
-    // Also persist locally for offline support
-    await saveOfflineData('parkingSessions', session);
-
-    showNotification(`Vehicle parked at Bay ${bay.number} (${bay.type})`, 'info');
+    showNotification(`Payment session started in ${zone.name}`, 'success');
     if ('vibrate' in navigator) navigator.vibrate(50);
+
+    return session;
 }
 
-async function endParkingSession(bayId) {
-    const session = activeSessions[bayId];
-    if (!session) return;
-
-    const bay = bays.find(b => b.id === bayId);
-    const duration = Math.floor((Date.now() - session.startTime) / 60000);
-
-    if (duration > bay.maxMinutes) {
-        showNotification(`Vehicle left Bay ${bay.number} after ${duration} min (OVERSTAY)`, 'warning');
-    } else {
-        showNotification(`Vehicle left Bay ${bay.number} after ${duration} min`, 'success');
+/**
+ * End a payment session
+ * This replaces the old sensor-based parking session end
+ * @param {string} sessionId - Session ID to end
+ */
+async function endPaymentSession(sessionId) {
+    const session = paymentSessions.find(s => s.sessionId === sessionId);
+    if (!session) {
+        showNotification('Session not found', 'danger');
+        return;
     }
 
     session.status = 'completed';
     session.endTime = Date.now();
-    session.duration = duration;
-    await saveOfflineData('parkingSessions', session);
+    session.updatedAt = new Date().toISOString();
 
-    delete activeSessions[bayId];
+    await syncPaymentSessionToFirebase(session);
+    await saveOfflineData('paymentSessions', session);
 
-    // Push deletion to Firebase — all devices update instantly
-    await syncSessionsToFirebase();
-    await incrementDailySessions();
-
+    showNotification(`Payment session ended`, 'success');
     if ('vibrate' in navigator) navigator.vibrate([50, 50, 50]);
 }
 
-function getProgress(bayId) {
-    const numericId = parseInt(bayId);
-    const session = activeSessions[bayId];
-    if (!session) return 0;
-    const bay = bays.find(b => b.id === numericId);
-    if (!bay) return 0;
-    const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
-    return Math.min(100, (elapsed / bay.maxMinutes) * 100);
-}
-
-function formatTime(bayId) {
-    const numericId = parseInt(bayId);
-    const session = activeSessions[bayId];
-    if (!session) return '0:00';
-    const bay = bays.find(b => b.id === numericId);
-    if (!bay) return '0:00';
-
-    const totalSeconds = Math.floor((Date.now() - session.startTime) / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const limitSeconds = bay.maxMinutes * 60;
-    const pad = (num) => num.toString().padStart(2, '0');
-
-    if (totalSeconds > limitSeconds) {
-        const overstaySeconds = totalSeconds - limitSeconds;
-        const overstayM = Math.floor(overstaySeconds / 60);
-        const overstayS = overstaySeconds % 60;
-        return `+${overstayM}:${pad(overstayS)}`;
-    }
-    return `${minutes}:${pad(seconds)} / ${bay.maxMinutes}m`;
-}
-
-// ============================================================
-// VIOLATION LOGIC
-// ============================================================
-
-async function triggerEnforcerAlert(bayId) {
-    const numericBayId = parseInt(bayId);
-    const session = activeSessions[bayId];
-    const bay = bays.find(b => b.id === numericBayId);
-
-    if (!session || !bay) return;
-
-    // Guard: prevent duplicate violations — coerce both sides to number to avoid "1" !== 1 mismatch
-    if (violations.some(v => Number(v.bayId) === Number(bayId) && !v.compounded)) return;
-
-    const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
-    const overstay = elapsed - bay.maxMinutes;
-
-    try { document.getElementById('alertSound').play(); } catch (e) {}
-    if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 200]);
-
-    const violation = {
-        id: Date.now(),
-        bayId: bayId,
-        bayNumber: bay.number,
-        bayLocation: bay.location,
-        overstayMinutes: overstay,
-        time: new Date().toISOString(),
-        status: 'pending',
-        compounded: false,
-        timestamp: new Date().toISOString()
-    };
-
-    violations.push(violation);
-    enforcerAlerts.push(violation);
-
-    // Sync violation to Firebase — all devices see it
-    await syncViolationToFirebase(violation);
-    await saveOfflineData('violations', violation);
-    await incrementDailyViolations();
-
-    if ('Notification' in window && Notification.permission === 'granted') {
-        const registration = await navigator.serviceWorker.ready;
-        registration.showNotification('🚨 Parking Violation Alert!', {
-            body: `Bay ${bay.number} has exceeded time limit by ${overstay} minutes`,
-            icon: '/icons/icon-192x192.png',
-            tag: `violation-${bayId}`,
-            renotify: true,
-            data: { url: '/', bayId: bayId }
-        });
-    }
-
-    showNotification(`🚨 VIOLATION: Bay ${bay.number} overstay ${overstay} minutes!`, 'danger');
-}
-
-function updateEnforcerPanel() {
-    const panel = $('#enforcerPanel');
-    const pendingViolations = violations.filter(v => !v.compounded);
-
-    if (pendingViolations.length === 0) {
-        panel.html('<p class="text-muted text-center small">No active violations</p>');
-        $('#alertBadge').text('0');
+/**
+ * Cancel a payment session
+ * @param {string} sessionId - Session ID to cancel
+ */
+async function cancelPaymentSession(sessionId) {
+    const session = paymentSessions.find(s => s.sessionId === sessionId);
+    if (!session) {
+        showNotification('Session not found', 'danger');
         return;
     }
 
-    $('#alertBadge').text(pendingViolations.length);
+    session.status = 'cancelled';
+    session.updatedAt = new Date().toISOString();
 
-    let html = '';
-    pendingViolations.forEach(v => {
-        const fee = calculateCompoundFee(v.overstayMinutes);
-        html += `
-            <div class="enforcer-alert">
-                <div class="d-flex justify-content-between">
-                    <h6 class="mb-1">Bay ${v.bayNumber}</h6>
-                    <span class="badge bg-light text-dark">+${v.overstayMinutes}m</span>
-                </div>
-                <p class="mb-2 small">Location: ${v.bayLocation}</p>
-                <p class="mb-2 small">Fee: RM${fee}</p>
-                <button class="btn btn-sm btn-light w-100" onclick="compoundViolation(${v.id})">
-                    Compound
-                </button>
-            </div>
-        `;
+    await syncPaymentSessionToFirebase(session);
+    await saveOfflineData('paymentSessions', session);
+
+    showNotification(`Payment session cancelled`, 'warning');
+}
+
+// ============================================================
+// COMPLIANCE CALCULATION (replaces old Violation Logic)
+// ============================================================
+
+/**
+ * Calculate compliance for all zones and store snapshots
+ * This replaces the old violation detection system
+ */
+function calculateAndStoreCompliance() {
+    const currentTime = Date.now();
+
+    console.log('=== COMPLIANCE CALCULATION DEBUG ===');
+    console.log('Current Time:', new Date(currentTime).toISOString());
+
+    // Bucket sessions into the zone that GPS-contains them, ignoring stored zoneId.
+    // Only sessions that are active AND currently within their time window are counted.
+    const activeByZone = {};
+    paymentSessions.forEach(session => {
+        if (session.status !== 'active') return;
+        if (currentTime < session.startTime || currentTime > session.endTime) return;
+        const containingZone = (session.location && session.location.lat != null)
+            ? findZoneForCoords(session.location, zones)
+            : zones.find(z => z.id === session.zoneId);
+        if (!containingZone) return;
+        activeByZone[containingZone.id] = (activeByZone[containingZone.id] || 0) + 1;
     });
 
-    panel.html(html);
+    zones.forEach(zone => {
+        const activeCount = activeByZone[zone.id] || 0;
+        const complianceRate = calculateComplianceRate(activeCount, zone.totalLots);
+        const statusColor = getComplianceStatusColor(complianceRate, COMPLIANCE_THRESHOLDS);
+
+        // Debug output
+        console.log(`\nZone: ${zone.name} (${zone.id})`);
+        console.log(`  Total Lots: ${zone.totalLots}`);
+        console.log(`  Active Sessions: ${activeCount}`);
+        console.log(`  Compliance Rate: ${complianceRate.toFixed(1)}%`);
+        console.log(`  Status: ${statusColor.toUpperCase()}`);
+
+        const snapshot = {
+            zoneId: zone.id,
+            zoneName: zone.name,
+            timestamp: currentTime,
+            activeSessions: activeCount,
+            totalLots: zone.totalLots,
+            complianceRate: complianceRate,
+            statusColor: statusColor,
+            createdAt: new Date().toISOString()
+        };
+
+        // Sync to Firestore
+        syncComplianceSnapshotToFirebase(snapshot);
+    });
+
+    console.log('=== END COMPLIANCE CALCULATION ===\n');
 }
 
-function calculateCompoundFee(overstayMinutes) {
-    const hours = Math.ceil(overstayMinutes / 60);
-    return 30 + (Math.max(0, hours - 1) * 10);
-}
+// calculateComplianceRate, getComplianceStatusColor → compliance-utils.js
+// isWithinGeofence, calculateDistance, findZoneForCoords → geofencing-utils.js
+// (Both files must be loaded before app.js in the host page.)
 
-async function compoundViolation(violationId) {
-    const violation = violations.find(v => v.id === violationId);
-    if (!violation) return;
+/**
+ * Start periodic compliance calculation
+ */
+function startComplianceCalculation() {
+    // Calculate immediately
+    calculateAndStoreCompliance();
 
-    violation.compounded = true;
-    violation.status = 'compounded';
-    violation.compoundedAt = new Date().toISOString();
-
-    // Sync updated violation to Firebase
-    await syncViolationToFirebase(violation);
-    await saveOfflineData('violations', violation);
-
-    const fee = calculateCompoundFee(violation.overstayMinutes);
-    await incrementDailyFees(fee);
-    showNotification(`✅ Bay ${violation.bayNumber} compounded! Fee: RM${fee}`, 'success');
-    if ('vibrate' in navigator) navigator.vibrate(100);
-
-    updateEnforcerPanel();
-    updateStats();
-}
-
-async function compoundAllViolations() {
-    const pendingViolations = violations.filter(v => !v.compounded);
-    for (let violation of pendingViolations) {
-        violation.compounded = true;
-        violation.status = 'compounded';
-        violation.compoundedAt = new Date().toISOString();
-        await syncViolationToFirebase(violation);
-        await saveOfflineData('violations', violation);
-    }
-    if (pendingViolations.length > 0) {
-        showNotification(`✅ Compounded ${pendingViolations.length} violation(s)`, 'success');
-    }
-    updateEnforcerPanel();
-    updateStats();
+    // Calculate every 30 seconds
+    setInterval(calculateAndStoreCompliance, 30000);
 }
 
 
 // ============================================================
-// HISTORICAL DATA — snapshots every 5 min, daily summaries
+// HISTORICAL DATA — compliance snapshots, daily summaries
 // ============================================================
-
-function startHistoricalSnapshots() {
-    writeSnapshot();
-    setInterval(writeSnapshot, 5 * 60 * 1000);
-}
-
-async function writeSnapshot() {
-    if (!historyRef) return;
-    const occupied         = Object.keys(activeSessions).length;
-    const available        = bays.length - occupied;
-    const activeViolations = violations.filter(v => !v.compounded).length;
-    const now  = new Date();
-    const key  = now.toISOString().replace(/[:.]/g, '-');
-
-    try {
-        await historyRef.child(key).set({
-            timestamp: now.getTime(),
-            occupied,
-            available,
-            violations: activeViolations,
-            total: bays.length
-        });
-
-        // Auto-prune snapshots older than 7 days
-        const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
-        const old = await historyRef
-            .orderByChild('timestamp')
-            .endAt(cutoff)
-            .once('value');
-        if (old.val()) {
-            const updates = {};
-            Object.keys(old.val()).forEach(k => updates[k] = null);
-            await historyRef.update(updates);
-        }
-    } catch (e) {
-        console.warn('[Firebase] Snapshot write failed:', e);
-    }
-}
 
 async function incrementDailySessions() {
     if (!dailySummaryRef) return;
     const today = new Date().toISOString().split('T')[0];
     try {
-        await dailySummaryRef.child(`${today}/totalSessions`)
-            .transaction(v => (v || 0) + 1);
+        const docRef = dailySummaryRef.doc(today);
+        await docRef.set({
+            date: today,
+            totalSessions: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
     } catch (e) { console.warn('[Firebase] incrementDailySessions failed:', e); }
-}
-
-async function incrementDailyViolations() {
-    if (!dailySummaryRef) return;
-    const today = new Date().toISOString().split('T')[0];
-    try {
-        await dailySummaryRef.child(`${today}/totalViolations`)
-            .transaction(v => (v || 0) + 1);
-        // Ensure date field exists for sorting
-        await dailySummaryRef.child(`${today}/date`).transaction(v => v || today);
-    } catch (e) { console.warn('[Firebase] incrementDailyViolations failed:', e); }
 }
 
 async function incrementDailyFees(fee) {
     if (!dailySummaryRef) return;
     const today = new Date().toISOString().split('T')[0];
     try {
-        await dailySummaryRef.child(`${today}/feesCollected`)
-            .transaction(v => (v || 0) + fee);
-        await dailySummaryRef.child(`${today}/date`).transaction(v => v || today);
+        const docRef = dailySummaryRef.doc(today);
+        await docRef.set({
+            date: today,
+            feesCollected: firebase.firestore.FieldValue.increment(fee)
+        }, { merge: true });
     } catch (e) { console.warn('[Firebase] incrementDailyFees failed:', e); }
 }
 
@@ -639,78 +613,25 @@ async function incrementDailyFees(fee) {
 // ============================================================
 
 function updateStats() {
-    const total = bays.length;
-    const occupied = Object.keys(activeSessions).length;
-    const available = total - occupied;
-    const violationCount = violations.filter(v => !v.compounded).length;
+    const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
+    const activeSessionsCount = paymentSessions.filter(s => s.status === 'active').length;
 
-    $('#totalBays').text(total);
-    $('#availableBays').text(available);
-    $('#occupiedBays').text(occupied);
-    $('#violationCount').text(violationCount);
-}
-
-function updateActiveSessionsTable() {
-    const tbody = $('#activeSessionsTable');
-    const sessions = Object.values(activeSessions);
-
-    if (sessions.length === 0) {
-        tbody.html('<tr><td colspan="7" class="text-center text-muted">No active sessions</td></tr>');
-        return;
-    }
-
-    let html = '';
-    sessions.forEach(session => {
-        const bay = bays.find(b => b.id === parseInt(session.bayId));
-        if (!bay) return;
-
-        const elapsedMs = Date.now() - session.startTime;
-        const totalSeconds = Math.floor(elapsedMs / 1000);
-        const isViolation = elapsedMs > (bay.maxMinutes * 60000);
-        const timeIn = new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        const pad = (num) => num.toString().padStart(2, '0');
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        const durationStr = `${pad(h)}:${pad(m)}:${pad(s)}`;
-
-        let compoundBtn = '';
-        if (isViolation) {
-            const violation = violations.find(v => Number(v.bayId) === Number(session.bayId) && !v.compounded);
-            if (violation) {
-                compoundBtn = `
-                    <button class="badge badge-pill text-white" style="background-color: var(--accent-success); padding: 6px 14px; font-weight: 500;" onclick="compoundViolation(${violation.id})" title="Compound Violation">
-                        <i class="bi bi-shield-fill"></i> Compound
-                    </button>
-                `;
-            }
-        }
-
-        html += `
-            <tr class="${isViolation ? 'table-danger' : ''}">
-                <td data-label="Bay ID" class="fw-bold">${bay.location}-${bay.number}</td>
-                <td data-label="Location" class="text-muted">${bay.location}</td>
-                <td data-label="Time In">${timeIn}</td>
-                <td data-label="Duration">${durationStr}</td>
-                <td data-label="Type" class="text-muted">${bay.type}</td>
-                <td data-label="Status">
-                    <span class="badge badge-pill text-white" style="background-color: ${isViolation ? 'var(--accent-danger)' : 'var(--accent-primary)'}; border-radius: 20px; padding: 6px 14px; font-weight: 500;">
-                        ${isViolation ? 'Violation' : 'Occupied'}
-                    </span>
-                </td>
-                <td class="text-end">
-                    ${compoundBtn}
-                    <button class="btn btn-sm btn-link text-danger p-0 m-0 border-0" onclick="endParkingSession(${session.bayId})" title="End Session">
-                        <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                </td>
-            </tr>
-        `;
+    // Calculate overall compliance
+    let totalCompliance = 0;
+    zones.forEach(zone => {
+        const activeInZone = paymentSessions.filter(s =>
+            s.zoneId === zone.id && s.status === 'active'
+        ).length;
+        totalCompliance += calculateComplianceRate(activeInZone, zone.totalLots);
     });
+    const avgCompliance = zones.length > 0 ? totalCompliance / zones.length : 0;
 
-    tbody.html(html);
+    $('#totalZones').text(zones.length);
+    $('#totalLots').text(totalLots);
+    $('#activeSessions').text(activeSessionsCount);
+    $('#avgCompliance').text(avgCompliance.toFixed(1) + '%');
 }
+
 
 function showNotification(message, type = 'info') {
     const bgClass = {
@@ -736,32 +657,53 @@ function showNotification(message, type = 'info') {
     }, 4000);
 }
 
-function simulateRandomCar() {
-    const availableBays = bays.filter(b => !activeSessions[b.id]);
-    if (availableBays.length === 0) {
-        showNotification('No available bays!', 'warning');
+/**
+ * Simulate a random payment session for demo purposes
+ * This replaces the old simulateRandomCar function
+ */
+function simulateRandomPaymentSession() {
+    if (zones.length === 0) {
+        showNotification('No zones available', 'warning');
         return;
     }
-    const randomBay = availableBays[Math.floor(Math.random() * availableBays.length)];
-    startParkingSession(randomBay.id);
+
+    const randomZone = zones[Math.floor(Math.random() * zones.length)];
+    const vehicleId = `VEH_${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    const location = randomZone.center;
+    const duration = Math.floor(Math.random() * 60) + 30; // 30-90 minutes
+
+    createPaymentSession(randomZone.id, vehicleId, location, duration);
 }
 
-async function resetAllBays() {
-    if (!confirm('Reset all parking bays?')) return;
+/**
+ * Reset all payment sessions
+ * This replaces the old resetAllBays function
+ */
+async function resetAllSessions() {
+    if (!confirm('Reset all payment sessions?')) return;
 
-    activeSessions = {};
-    violations = [];
-    enforcerAlerts = [];
+    paymentSessions = [];
+    window.PAYMENT_SESSIONS = paymentSessions;
 
     // Clear Firebase
-    if (sessionsRef) await sessionsRef.set(null);
-    if (violationsRef) await violationsRef.set(null);
+    if (paymentSessionsRef) {
+        const snapshot = await paymentSessionsRef.get();
+        const batch = firestore.batch();
+        snapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+    }
 
     // Clear IndexedDB
     if (db) {
-        const transaction = db.transaction(['parkingSessions', 'violations'], 'readwrite');
-        await transaction.objectStore('parkingSessions').clear();
-        await transaction.objectStore('violations').clear();
+        const transaction = db.transaction(['paymentSessions'], 'readwrite');
+        await transaction.objectStore('paymentSessions').clear();
+    }
+
+    // In dummy mode, repopulate so the demo keeps showing meaningful data
+    if (USE_DUMMY_DATA) {
+        loadDummyData();
     }
 
     updateAll();
@@ -771,41 +713,9 @@ async function resetAllBays() {
 function refreshData() { updateAll(); }
 
 function updateAll() {
-    renderBays();
     updateStats();
-    updateActiveSessionsTable();
-    updateEnforcerPanel();
-}
-
-function startTimers() {
-    setInterval(() => {
-        Object.keys(activeSessions).forEach(bayId => {
-            $(`#timer-${bayId}`).text(formatTime(bayId));
-            const progress = getProgress(bayId);
-            $(`#timer-${bayId}`).closest('.bay-card').find('.progress-bar').css('width', progress + '%');
-        });
-        updateActiveSessionsTable();
-        updateStats();
-    }, 1000);
-}
-
-function startEnforcerCheck() {
-    setInterval(() => {
-        Object.keys(activeSessions).forEach(bayId => {
-            const numericId = parseInt(bayId);
-            const bay = bays.find(b => b.id === numericId);
-            const session = activeSessions[bayId];
-            if (!bay || !session) return;
-
-            const elapsedMs = Date.now() - session.startTime;
-            const limitMs = bay.maxMinutes * 60000;
-
-            if (elapsedMs > limitMs && !session.enforcerNotified) {
-                triggerEnforcerAlert(bayId);
-                session.enforcerNotified = true;
-            }
-        });
-    }, 2000);
+    // Notify iframe pages to re-render their own UI
+    window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
 }
 
 // Online/offline
@@ -827,11 +737,11 @@ async function syncOfflineQueue() {
         const offlineQueue = await loadOfflineData('offlineQueue');
         for (let item of offlineQueue) {
             console.log('Processing queued item:', item);
-            if (item.action === 'syncSessions' && sessionsRef) {
-                await sessionsRef.set(item.data);
+            if (item.action === 'syncPaymentSession' && paymentSessionsRef) {
+                await paymentSessionsRef.doc(item.data.sessionId).set(item.data);
             }
-            if (item.action === 'syncViolation' && violationsRef) {
-                await violationsRef.child(String(item.data.id)).set(item.data);
+            if (item.action === 'syncComplianceSnapshot' && complianceSnapshotsRef) {
+                await complianceSnapshotsRef.add(item.data);
             }
         }
         if (offlineQueue.length > 0) {
@@ -846,13 +756,6 @@ async function syncOfflineQueue() {
 
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshData();
-});
-
-window.addEventListener('beforeunload', (e) => {
-    if (Object.keys(activeSessions).length > 0) {
-        e.preventDefault();
-        e.returnValue = 'There are active parking sessions. Are you sure you want to leave?';
-    }
 });
 
 // Theme
@@ -872,13 +775,12 @@ function updateThemeIcon(theme) {
     }
 }
 
-// Expose globals
-window.toggleBay = toggleBay;
-window.endParkingSession = endParkingSession;
-window.simulateRandomCar = simulateRandomCar;
-window.resetAllBays = resetAllBays;
-window.compoundViolation = compoundViolation;
-window.compoundAllViolations = compoundAllViolations;
+// Expose functions for global access
+window.createPaymentSession = createPaymentSession;
+window.endPaymentSession = endPaymentSession;
+window.cancelPaymentSession = cancelPaymentSession;
+window.simulateRandomPaymentSession = simulateRandomPaymentSession;
+window.resetAllSessions = resetAllSessions;
 window.refreshData = refreshData;
 window.toggleTheme = toggleTheme;
 

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Summary Dashboard</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -102,44 +102,13 @@
             position: relative;
         }
 
-        /* Sensor status grid */
-        .sensor-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 10px;
-        }
-
-        .sensor-item {
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            box-shadow: var(--card-shadow);
-            transition: transform 0.2s;
-        }
-
-        .sensor-item:hover {
-            transform: translateY(-1px);
-        }
-
-        .sensor-id {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .sensor-bay {
+        .zone-name {
             font-size: 0.95rem;
             font-weight: 700;
             color: var(--text-primary);
         }
 
-        .sensor-status {
+        .zone-status {
             display: inline-flex;
             align-items: center;
             gap: 5px;
@@ -149,42 +118,37 @@
             border-radius: 20px;
         }
 
-        .sensor-status.online {
+        .zone-status.green {
             background: rgba(16, 185, 129, 0.12);
             color: #10b981;
         }
 
-        .sensor-status.offline {
+        .zone-status.orange {
+            background: rgba(245, 158, 11, 0.12);
+            color: #f59e0b;
+        }
+
+        .zone-status.red {
             background: rgba(239, 68, 68, 0.1);
             color: #ef4444;
         }
 
-        .sensor-status.occupied {
-            background: rgba(59, 66, 86, 0.12);
-            color: var(--accent-primary);
-        }
-
-        .sensor-status.violation {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-        }
-
-        .sensor-dot {
+        .status-dot {
             width: 6px;
             height: 6px;
             border-radius: 50%;
             animation: pulse-dot 2s ease-in-out infinite;
         }
 
-        .online .sensor-dot {
+        .green .status-dot {
             background: #10b981;
         }
 
-        .occupied .sensor-dot {
-            background: var(--accent-primary);
+        .orange .status-dot {
+            background: #f59e0b;
         }
 
-        .violation .sensor-dot {
+        .red .status-dot {
             background: #ef4444;
         }
 
@@ -200,27 +164,9 @@
             }
         }
 
-        /* Violation history table */
-        .violation-row {
+        /* Session history table */
+        .session-row {
             font-size: 0.85rem;
-        }
-
-        .compounded-badge {
-            background: rgba(16, 185, 129, 0.12);
-            color: #10b981;
-            border-radius: 20px;
-            padding: 2px 10px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .pending-badge {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border-radius: 20px;
-            padding: 2px 10px;
-            font-size: 0.75rem;
-            font-weight: 600;
         }
 
         /* Section headers */
@@ -249,14 +195,14 @@
             <div class="kpi-card">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-value" id="kpiTotal">8</div>
-                        <div class="kpi-label">Total Bays</div>
+                        <div class="kpi-value" id="kpiTotal">0</div>
+                        <div class="kpi-label">Total Lots</div>
                     </div>
                     <div class="kpi-icon" style="background:#f0f1f5; color: var(--accent-primary);">
                         <i class="bi bi-p-square-fill"></i>
                     </div>
                 </div>
-                <div class="kpi-sub">2 locations · 2 types</div>
+                <div class="kpi-sub" id="kpiZonesCount">0 zones</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
@@ -264,71 +210,70 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <div class="kpi-value" id="kpiOccupied">0</div>
-                        <div class="kpi-label">Occupied</div>
+                        <div class="kpi-label">Active Sessions</div>
                     </div>
                     <div class="kpi-icon" style="background:rgba(59,66,86,0.1); color:#3b4256;">
                         <i class="bi bi-car-front-fill"></i>
                     </div>
                 </div>
-                <div class="kpi-sub"><span id="kpiOccupancyPct">0%</span> occupancy rate</div>
+                <div class="kpi-sub"><span id="kpiOccupancyPct">0%</span> compliance rate</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="kpi-card">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-value" id="kpiViolations">0</div>
-                        <div class="kpi-label">Active Violations</div>
-                    </div>
-                    <div class="kpi-icon" style="background:#fecaca; color:#ef4444;">
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                    </div>
-                </div>
-                <div class="kpi-sub"><span id="kpiCompounded">0</span> compounded today</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="kpi-card">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <div class="kpi-value" id="kpiFees">RM0</div>
-                        <div class="kpi-label">Fees Collected</div>
+                        <div class="kpi-value" id="kpiCompliance">0%</div>
+                        <div class="kpi-label">Avg Compliance</div>
                     </div>
                     <div class="kpi-icon" style="background:rgba(16,185,129,0.12); color:#10b981;">
-                        <i class="bi bi-cash-stack"></i>
+                        <i class="bi bi-graph-up-arrow"></i>
                     </div>
                 </div>
-                <div class="kpi-sub">From compounded fines</div>
+                <div class="kpi-sub" id="kpiComplianceStatus">No data</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="kpi-value" id="kpiSessions">0</div>
+                        <div class="kpi-label">Total Sessions</div>
+                    </div>
+                    <div class="kpi-icon" style="background:rgba(99,102,241,0.12); color:#6366f1;">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                </div>
+                <div class="kpi-sub">7-day total</div>
             </div>
         </div>
     </div>
 
     <!-- ===== Charts Row ===== -->
     <div class="row g-3 mb-4">
-        <!-- Occupancy Donut -->
+        <!-- Compliance Distribution Donut -->
         <div class="col-md-4">
             <div class="chart-card h-100">
-                <div class="chart-title">Bay Occupancy</div>
-                <div class="chart-sub">Current snapshot</div>
+                <div class="chart-title">Zone Compliance Distribution</div>
+                <div class="chart-sub">Current snapshot by status</div>
                 <div class="chart-wrapper" style="height: 200px;">
                     <canvas id="occupancyDonut"></canvas>
                 </div>
                 <div class="d-flex justify-content-center gap-4 mt-3" style="font-size:0.8rem;">
                     <span><span
-                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;margin-right:5px;"></span>Available</span>
+                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;margin-right:5px;"></span>High (≥80%)</span>
                     <span><span
-                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3b4256;margin-right:5px;"></span>Occupied</span>
+                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:5px;"></span>Medium (50-79%)</span>
                     <span><span
-                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:5px;"></span>Violation</span>
+                            style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:5px;"></span>Low (<50%)</span>
                 </div>
             </div>
         </div>
-
-        <!-- Occupancy Timeline -->
+        <!-- 7-Day Compliance Line -->
         <div class="col-md-8">
             <div class="chart-card h-100">
-                <div class="chart-title">Occupancy Over Time</div>
-                <div class="chart-sub">Average occupied bays during operating hours (last 7 days)</div>
+                <div class="chart-title">Compliance Trend</div>
+                <div class="chart-sub">7-day average compliance rate per day</div>
                 <div class="chart-wrapper" style="height: 200px;">
                     <canvas id="occupancyLine"></canvas>
                 </div>
@@ -351,45 +296,45 @@
         </div>
         <div class="col-md-4">
             <div class="kpi-card d-flex align-items-center gap-3">
-                <div class="kpi-icon" style="background:rgba(239,68,68,0.1); color:#ef4444; flex-shrink:0;">
-                    <i class="bi bi-shield-exclamation"></i>
-                </div>
-                <div>
-                    <div class="kpi-value" id="kpiHistViolations" style="font-size:1.5rem;">—</div>
-                    <div class="kpi-label">Total Violations (7 days)</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="kpi-card d-flex align-items-center gap-3">
                 <div class="kpi-icon" style="background:rgba(16,185,129,0.12); color:#10b981; flex-shrink:0;">
                     <i class="bi bi-graph-up-arrow"></i>
                 </div>
                 <div>
                     <div class="kpi-value" id="kpiHistFees" style="font-size:1.5rem;">—</div>
-                    <div class="kpi-label">Total Fees Collected (7 days)</div>
+                    <div class="kpi-label">Avg Compliance (7 days)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kpi-card d-flex align-items-center gap-3">
+                <div class="kpi-icon" style="background:rgba(245,158,11,0.12); color:#f59e0b; flex-shrink:0;">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <div>
+                    <div class="kpi-value" id="kpiAvgDuration" style="font-size:1.5rem;">—</div>
+                    <div class="kpi-label">Avg Session Duration</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Violations Chart -->
+    <!-- Sessions Chart -->
     <div class="row g-3 mb-4">
         <div class="col-md-6">
             <div class="chart-card">
-                <div class="chart-title">Violations Over Time</div>
-                <div class="chart-sub">Total violations per day (last 7 days)</div>
+                <div class="chart-title">Sessions Over Time</div>
+                <div class="chart-sub">Total sessions per day (last 7 days)</div>
                 <div class="chart-wrapper" style="height: 180px;">
-                    <canvas id="violationsLine"></canvas>
+                    <canvas id="sessionsLine"></canvas>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="chart-card">
-                <div class="chart-title">Violations by Bay</div>
-                <div class="chart-sub">Total violations per parking bay</div>
+                <div class="chart-title">Sessions by Zone</div>
+                <div class="chart-sub">Total sessions per zone</div>
                 <div class="chart-wrapper" style="height: 180px;">
-                    <canvas id="violationsBar"></canvas>
+                    <canvas id="sessionsBar"></canvas>
                 </div>
             </div>
         </div>
@@ -399,9 +344,9 @@
     <div class="row g-3 mb-4">
         <div class="col-md-6">
             <div class="chart-card">
-                <div class="chart-title">Fees Collected <span class="text-muted fw-normal"
+                <div class="chart-title">Compliance Over Time <span class="text-muted fw-normal"
                         style="font-size:0.75rem;">(Last 7 Days)</span></div>
-                <div class="chart-sub">Daily compound fee totals in RM</div>
+                <div class="chart-sub">Daily compliance rate average</div>
                 <div class="chart-wrapper" style="height: 180px;">
                     <canvas id="feeChart"></canvas>
                 </div>
@@ -411,7 +356,7 @@
             <div class="chart-card">
                 <div class="chart-title">Peak Hours <span class="text-muted fw-normal" style="font-size:0.75rem;">(7-Day
                         Average)</span></div>
-                <div class="chart-sub">Average occupied bays by hour — red bar = busiest hour</div>
+                <div class="chart-sub">Average active sessions by hour — red bar = busiest hour</div>
                 <div class="chart-wrapper" style="height: 180px;">
                     <canvas id="peakChart"></canvas>
                 </div>
@@ -419,19 +364,36 @@
         </div>
     </div>
 
-    <!-- ===== Sensor Status ===== -->
+    <!-- ===== Zone Compliance Status ===== -->
     <div class="section-header mb-3">
-        <h5 class="section-title">Sensor Status</h5>
-        <small class="text-muted" id="sensorLastUpdate">—</small>
+        <h5 class="section-title">Zone Compliance Status</h5>
+        <small class="text-muted" id="zoneLastUpdate">—</small>
     </div>
-    <div class="sensor-grid mb-4" id="sensorGrid">
+    <div class="row g-3 mb-4" id="zonesGrid">
         <!-- rendered by JS -->
     </div>
 
-    <!-- ===== Violation History ===== -->
+    <!-- ===== Debug Panel (for testing) ===== -->
+    <div class="card mb-4" style="border: 1px solid #6366f1; background: rgba(99, 102, 241, 0.05);">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background: rgba(99, 102, 241, 0.1); border-bottom: 1px solid #6366f1;">
+            <h6 class="mb-0 fw-bold" style="color: #6366f1;">
+                <i class="bi bi-bug me-2"></i>Debug Panel - Compliance Calculation
+            </h6>
+            <button class="btn btn-sm btn-outline-primary" onclick="runDebugCalculation()">
+                <i class="bi bi-play-fill"></i> Run Calculation
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="debugOutput" style="font-family: 'Courier New', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; color: var(--text-primary);">
+                <div class="text-muted">Click "Run Calculation" to see compliance details...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Payment Session History ===== -->
     <div class="section-header">
-        <h5 class="section-title">Violation History</h5>
-        <small class="text-muted" id="violationHistoryCount">0 records</small>
+        <h5 class="section-title">Payment Session History</h5>
+        <small class="text-muted" id="sessionHistoryCount">0 records</small>
     </div>
     <div class="card table-dark-custom mb-4">
         <div class="card-body p-0">
@@ -439,17 +401,17 @@
                 <table class="table mb-0">
                     <thead>
                         <tr>
-                            <th>Bay</th>
-                            <th>Location</th>
-                            <th>Overstay</th>
-                            <th>Fee</th>
-                            <th>Time</th>
+                            <th>Session ID</th>
+                            <th>Zone</th>
+                            <th>Vehicle</th>
+                            <th>Time Range</th>
+                            <th>Duration</th>
                             <th>Status</th>
                         </tr>
                     </thead>
-                    <tbody id="violationHistoryTable">
+                    <tbody id="sessionHistoryTable">
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">No violations recorded yet</td>
+                            <td colspan="6" class="text-center text-muted py-4">No payment sessions yet</td>
                         </tr>
                     </tbody>
                 </table>
@@ -461,24 +423,53 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="geofencing-utils.js"></script>
+    <script src="compliance-utils.js"></script>
+    <script src="dummy-data.js"></script>
     <script src="app.js"></script>
 
     <script>
         // ============================================================
-        // Dashboard — historical + live data from Firebase
+        // Dashboard — GPS/Geofencing Compliance Dashboard
+        // ============================================================
+        // This dashboard replaces the old sensor-based monitoring with
+        // zone compliance tracking based on active payment sessions.
         // ============================================================
 
+        // ---- Shared helpers (consistent with monitor.html and map.html) ----
+        // True if a session is paid AND currently within its time window.
+        function isSessionActiveNow(s, now) {
+            return s.status === 'active' && now >= s.startTime && now <= s.endTime;
+        }
+        // Returns the zone that GPS-contains the session, or its declared zone as fallback.
+        function resolveSessionZone(session, zones) {
+            if (session.location && session.location.lat != null) {
+                return findZoneForCoords(session.location, zones);
+            }
+            return zones.find(z => z.id === session.zoneId) || null;
+        }
+        // Build { zoneId -> activeCount } and return total truly-active count.
+        function bucketActiveByZone(sessions, zones, now) {
+            const map = {};
+            let total = 0;
+            sessions.forEach(s => {
+                if (!isSessionActiveNow(s, now)) return;
+                total++;
+                const z = resolveSessionZone(s, zones);
+                if (z) map[z.id] = (map[z.id] || 0) + 1;
+            });
+            return { activeByZone: map, totalActive: total };
+        }
+
         // Historical data buffers (populated from Firebase on load)
-        let occupancyHistory = [];   // { label, value } — avg occupied per day
-        let violationHistory = [];   // { label, value } — total violations per day
+        let complianceHistory = [];   // { label, value } — avg compliance per day
+        let sessionHistory = [];   // { label, value } — total sessions per day
         let feeHistory = [];   // { label, value } — fees per day
-        let peakHoursData = [];   // { label, value } — avg occupied per hour
-        let violByBayData = [];   // per-bay violation counts from Firebase history
-        let historicalLoaded = false;
+        let peakHoursData = [];   // { label, value } — avg compliance per hour
 
         // Chart instances
-        let donutChart, lineChart, violLineChart, violBarChart, feeChart, peakChart;
+        let donutChart, complianceLineChart, sessionLineChart, sessionBarChart, feeChart, peakChart;
 
         // ---- Theme-aware colours ----
         function chartColors() {
@@ -490,54 +481,54 @@
         }
 
         // ---- Donut (live snapshot) ----
-        function buildDonut(available, occupied, violation) {
+        function buildDonut(greenCount, orangeCount, redCount) {
             const ctx = document.getElementById('occupancyDonut').getContext('2d');
             if (donutChart) {
-                donutChart.data.datasets[0].data = [available, occupied, violation];
+                donutChart.data.datasets[0].data = [greenCount, orangeCount, redCount];
                 donutChart.update('none'); return;
             }
             donutChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     datasets: [{
-                        data: [available, occupied, violation],
-                        backgroundColor: ['#10b981', '#3b4256', '#ef4444'], borderWidth: 0, hoverOffset: 6
+                        data: [greenCount, orangeCount, redCount],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0, hoverOffset: 6
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false, cutout: '68%',
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: c => ` ${c.parsed} bay${c.parsed !== 1 ? 's' : ''}` } }
+                        tooltip: { callbacks: { label: c => ` ${c.parsed} zone${c.parsed !== 1 ? 's' : ''}` } }
                     }
                 }
             });
         }
 
-        // ---- Occupancy line — avg per day (operating hours only) ----
-        function buildOccupancyLine() {
+        // ---- Compliance trend line (7-day average compliance) ----
+        function buildComplianceLine() {
             const c = chartColors();
             const ctx = document.getElementById('occupancyLine').getContext('2d');
-            if (lineChart) {
-                lineChart.data.labels = occupancyHistory.map(p => p.label);
-                lineChart.data.datasets[0].data = occupancyHistory.map(p => p.value);
-                lineChart.update('none'); return;
+            if (complianceLineChart) {
+                complianceLineChart.data.labels = complianceHistory.map(p => p.label);
+                complianceLineChart.data.datasets[0].data = complianceHistory.map(p => p.value);
+                complianceLineChart.update('none'); return;
             }
-            lineChart = new Chart(ctx, {
+            complianceLineChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: occupancyHistory.map(p => p.label),
+                    labels: complianceHistory.map(p => p.label),
                     datasets: [{
-                        label: 'Avg occupied bays', data: occupancyHistory.map(p => p.value),
-                        borderColor: '#6366f1',
+                        label: 'Avg Compliance %', data: complianceHistory.map(p => p.value),
+                        borderColor: '#10b981',
                         backgroundColor: (ctx2) => {
                             const gradient = ctx2.chart.ctx.createLinearGradient(0, 0, 0, ctx2.chart.height);
-                            gradient.addColorStop(0, 'rgba(99,102,241,0.3)');
-                            gradient.addColorStop(1, 'rgba(99,102,241,0.02)');
+                            gradient.addColorStop(0, 'rgba(16,185,129,0.3)');
+                            gradient.addColorStop(1, 'rgba(16,185,129,0.02)');
                             return gradient;
                         },
                         borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
-                        pointBackgroundColor: '#6366f1', pointBorderColor: '#fff', pointBorderWidth: 2,
+                        pointBackgroundColor: '#10b981', pointBorderColor: '#fff', pointBorderWidth: 2,
                         fill: true, tension: 0.4
                     }]
                 },
@@ -547,86 +538,76 @@
                     scales: {
                         x: { grid: { color: c.grid }, ticks: { color: c.text } },
                         y: {
-                            grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 },
-                            min: 0, max: 8,
-                            title: { display: true, text: 'Bays', color: c.text, font: { size: 11 } }
+                            grid: { color: c.grid }, ticks: { color: c.text, stepSize: 10 },
+                            min: 0, max: 100,
+                            title: { display: true, text: 'Compliance %', color: c.text, font: { size: 11 } }
                         }
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} bays avg` } }
+                        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y}% compliance` } }
                     }
                 }
             });
         }
 
-        // ---- Violations line — total per day (from dailySummary) ----
-        function buildViolLine() {
-            const c = chartColors();
-            const ctx = document.getElementById('violationsLine').getContext('2d');
-            if (violLineChart) {
-                violLineChart.data.labels = violationHistory.map(p => p.label);
-                violLineChart.data.datasets[0].data = violationHistory.map(p => p.value);
-                violLineChart.update('none'); return;
-            }
-            violLineChart = new Chart(ctx, {
+        // ---- Sessions line — total per day (from dailySummary) ----
+        function buildSessionLine() {
+            const ctx = document.getElementById('sessionsLine').getContext('2d');
+            if (sessionLineChart) sessionLineChart.destroy();
+            sessionLineChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: violationHistory.map(p => p.label),
+                    labels: sessionHistory.map(p => p.label),
                     datasets: [{
-                        label: 'Violations', data: violationHistory.map(p => p.value),
-                        borderColor: '#ef4444',
-                        backgroundColor: (ctx2) => {
-                            const gradient = ctx2.chart.ctx.createLinearGradient(0, 0, 0, ctx2.chart.height);
-                            gradient.addColorStop(0, 'rgba(239,68,68,0.25)');
-                            gradient.addColorStop(1, 'rgba(239,68,68,0.01)');
-                            return gradient;
-                        },
-                        borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
-                        pointBackgroundColor: '#ef4444', pointBorderColor: '#fff', pointBorderWidth: 2,
-                        fill: true, tension: 0.4
+                        label: 'Sessions', data: sessionHistory.map(p => p.value),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.3,
+                        fill: true
                     }]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { color: c.grid }, ticks: { color: c.text } },
-                        y: { grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 }, min: 0 }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} violation${ctx.parsed.y !== 1 ? 's' : ''}` } }
+                        y: { beginAtZero: true, grid: { color: chartColors().grid }, ticks: { color: chartColors().text } },
+                        x: { grid: { display: false }, ticks: { color: chartColors().text } }
                     }
                 }
             });
         }
 
-        // ---- Violations by bay bar ----
-        function buildViolBar(bayLabels, bayViolCounts) {
-            const c = chartColors();
-            const ctx = document.getElementById('violationsBar').getContext('2d');
-            if (violBarChart) {
-                violBarChart.data.labels = bayLabels;
-                violBarChart.data.datasets[0].data = bayViolCounts;
-                violBarChart.update('none'); return;
-            }
-            violBarChart = new Chart(ctx, {
+        // ---- Sessions by zone bar ----
+        function buildSessionBar() {
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
+            const zoneLabels = zones.map(z => z.name);
+            const zoneSessionCounts = zones.map(z =>
+                sessions.filter(s => s.zoneId === z.id).length
+            );
+
+            const ctx = document.getElementById('sessionsBar').getContext('2d');
+            if (sessionBarChart) sessionBarChart.destroy();
+            sessionBarChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: bayLabels,
+                    labels: zoneLabels,
                     datasets: [{
-                        label: 'Violations', data: bayViolCounts,
-                        backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 6, borderWidth: 0
+                        label: 'Sessions', data: zoneSessionCounts,
+                        backgroundColor: '#6366f1',
+                        borderRadius: 4
                     }]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { display: false }, ticks: { color: c.text } },
-                        y: { grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 }, min: 0 }
-                    },
-                    plugins: { legend: { display: false } }
+                        y: { beginAtZero: true, grid: { color: chartColors().grid }, ticks: { color: chartColors().text } },
+                        x: { grid: { display: false }, ticks: { color: chartColors().text } }
+                    }
                 }
             });
         }
@@ -677,7 +658,7 @@
             });
             const values = opHours.map(p => p.value);
             const max = Math.max(...values, 0);
-            const bays = window.BAYS || [];
+            const totalLots = zones.reduce((sum, z) => sum + z.totalLots, 0);
             const colors = values.map(v => v > 0 && v === max
                 ? 'rgba(239,68,68,0.9)' : 'rgba(99,102,241,0.6)');
 
@@ -703,122 +684,178 @@
                         x: { grid: { display: false }, ticks: { color: c.text } },
                         y: {
                             grid: { color: c.grid }, ticks: { color: c.text, stepSize: 1 },
-                            min: 0, max: bays.length || 8,
-                            title: { display: true, text: 'Bays', color: c.text, font: { size: 11 } }
+                            min: 0, max: totalLots || 100,
+                            title: { display: true, text: 'Sessions', color: c.text, font: { size: 11 } }
                         }
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: ctx => ` Avg ${ctx.parsed.y} bays occupied` } }
+                        tooltip: { callbacks: { label: ctx => ` Avg ${ctx.parsed.y} active sessions` } }
                     }
                 }
             });
         }
 
-        // ---- Sensor grid ----
-        function renderSensorGrid() {
-            const grid = document.getElementById('sensorGrid');
-            const bays = window.BAYS || [];
-            if (!bays.length) return;
+        // ---- Zone compliance grid ----
+        function renderZoneGrid() {
+            const grid = document.getElementById('zonesGrid');
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
+            if (!zones.length) return;
+
+            const { activeByZone } = bucketActiveByZone(sessions, zones, Date.now());
+
             let html = '';
-            bays.forEach(bay => {
-                const session = (window.activeSessions || {})[String(bay.id)];
-                let statusClass = 'online', statusText = 'Available';
-                if (session) {
-                    const elapsed = Math.floor((Date.now() - session.startTime) / 60000);
-                    statusClass = elapsed > bay.maxMinutes ? 'violation' : 'occupied';
-                    statusText = elapsed > bay.maxMinutes ? 'Violation' : 'Occupied';
-                }
+            zones.forEach(zone => {
+                const activeInZone = activeByZone[zone.id] || 0;
+                const complianceRate = (activeInZone / zone.totalLots) * 100;
+                let statusColor = 'green';
+                if (complianceRate < 50) statusColor = 'red';
+                else if (complianceRate < 80) statusColor = 'orange';
+
                 html += `
-                    <div class="sensor-item">
-                        <div class="sensor-id">${bay.sensorId.replace('SENSOR_', 'S-')}</div>
-                        <div class="sensor-bay">${bay.location} · ${bay.number}</div>
-                        <span class="sensor-status ${statusClass}">
-                            <span class="sensor-dot"></span>${statusText}
-                        </span>
-                        <div style="font-size:0.7rem;color:var(--text-secondary);">${bay.type} limit</div>
-                    </div>`;
+                    <div class="col-6 col-md-3 mb-3">
+                        <div class="card zone-card h-100" style="border-left: 4px solid ${getStatusColorHex(statusColor)};">
+                            <div class="card-body">
+                                <h6 class="card-title fw-bold mb-2" style="color: var(--text-primary);">${zone.name}</h6>
+                                <div class="mb-2">
+                                    <small class="text-muted">Total Lots:</small>
+                                    <span class="fw-bold ms-1" style="color: var(--text-primary);">${zone.totalLots}</span>
+                                </div>
+                                <div class="mb-2">
+                                    <small class="text-muted">Active Sessions:</small>
+                                    <span class="fw-bold ms-1" style="color: var(--text-primary);">${activeInZone}</span>
+                                </div>
+                                <div class="mb-2">
+                                    <small class="text-muted">Compliance:</small>
+                                    <span class="fw-bold ms-1" style="color: ${getStatusColorHex(statusColor)};">${complianceRate.toFixed(1)}%</span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar" style="width: ${complianceRate}%; background-color: ${getStatusColorHex(statusColor)};"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
             });
             grid.innerHTML = html;
-            document.getElementById('sensorLastUpdate').textContent =
+            document.getElementById('zoneLastUpdate').textContent =
                 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        // ---- Violation history table ----
-        function renderViolationHistory() {
-            const tbody = document.getElementById('violationHistoryTable');
-            const allViolations = window.violations || [];
-            document.getElementById('violationHistoryCount').textContent =
-                `${allViolations.length} record${allViolations.length !== 1 ? 's' : ''}`;
-            if (!allViolations.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No violations recorded yet</td></tr>';
+        function getStatusColorHex(statusColor) {
+            const colors = {
+                green: '#10b981',
+                orange: '#f59e0b',
+                red: '#ef4444'
+            };
+            return colors[statusColor] || '#6b7280';
+        }
+
+        // ---- Payment session history table ----
+        function renderSessionHistory() {
+            const tbody = document.getElementById('sessionHistoryTable');
+            const sessions = window.PAYMENT_SESSIONS || [];
+            document.getElementById('sessionHistoryCount').textContent =
+                `${sessions.length} record${sessions.length !== 1 ? 's' : ''}`;
+            if (!sessions.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No payment sessions yet</td></tr>';
                 return;
             }
-            const sorted = [...allViolations].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            tbody.innerHTML = sorted.map(v => {
-                const fee = 30 + (Math.max(0, Math.ceil(v.overstayMinutes / 60) - 1) * 10);
-                const time = new Date(v.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const badge = v.compounded
-                    ? '<span class="compounded-badge">Compounded</span>'
-                    : '<span class="pending-badge">Pending</span>';
-                return `<tr class="violation-row ${v.compounded ? '' : 'table-danger'}">
-                    <td class="fw-bold">${v.bayNumber}</td>
-                    <td class="text-muted">${v.bayLocation}</td>
-                    <td>+${v.overstayMinutes} min</td>
-                    <td>RM${fee}</td>
-                    <td class="text-muted">${time}</td>
+            const sorted = [...sessions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            tbody.innerHTML = sorted.map(s => {
+                const timeIn = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const timeOut = new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const badge = s.status === 'active'
+                    ? '<span class="badge bg-primary">Active</span>'
+                    : s.status === 'completed'
+                    ? '<span class="badge bg-success">Completed</span>'
+                    : '<span class="badge bg-warning">Cancelled</span>';
+                return `<tr class="session-row">
+                    <td class="fw-bold small">${s.sessionId.substr(0, 12)}...</td>
+                    <td class="text-muted">${s.zoneName || s.zoneId}</td>
+                    <td>${s.vehicleId || 'N/A'}</td>
+                    <td class="text-muted">${timeIn} - ${timeOut}</td>
+                    <td class="text-muted">${s.durationMinutes} min</td>
                     <td>${badge}</td></tr>`;
             }).join('');
         }
 
         // ---- Main update (live Firebase push) ----
         function updateDashboard() {
-            const sessions = window.activeSessions || {};
-            const allViol = window.violations || [];
-            const bays = window.BAYS || [];
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
+            const now = Date.now();
 
-            const occupied = Object.keys(sessions).length;
-            const total = bays.length;
-            const available = total - occupied;
-            const activeViol = allViol.filter(v => !v.compounded).length;
-            const compounded = allViol.filter(v => v.compounded).length;
-            const fees = allViol.filter(v => v.compounded)
-                .reduce((sum, v) => sum + 30 + (Math.max(0, Math.ceil(v.overstayMinutes / 60) - 1) * 10), 0);
+            // Single bucketing pass: time-window active + GPS containment
+            const { activeByZone, totalActive: activeSessionsCount } =
+                bucketActiveByZone(sessions, zones, now);
 
-            let violBays = 0;
-            bays.forEach(bay => {
-                const s = sessions[String(bay.id)];
-                if (s && (Date.now() - s.startTime) > bay.maxMinutes * 60000) violBays++;
+            const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
+
+            // Calculate overall compliance
+            let totalCompliance = 0;
+            zones.forEach(zone => {
+                const activeInZone = activeByZone[zone.id] || 0;
+                totalCompliance += (activeInZone / zone.totalLots) * 100;
             });
+            const avgCompliance = zones.length > 0 ? totalCompliance / zones.length : 0;
+
+            // Determine compliance status
+            let complianceStatus = 'No data';
+            let complianceStatusColor = '#6b7280';
+            if (zones.length > 0) {
+                if (avgCompliance >= 80) {
+                    complianceStatus = 'High';
+                    complianceStatusColor = '#10b981';
+                } else if (avgCompliance >= 50) {
+                    complianceStatus = 'Medium';
+                    complianceStatusColor = '#f59e0b';
+                } else {
+                    complianceStatus = 'Low';
+                    complianceStatusColor = '#ef4444';
+                }
+            }
+
+            // Calculate average session duration
+            const completedSessions = sessions.filter(s => s.status === 'completed');
+            const avgDuration = completedSessions.length > 0
+                ? Math.round(completedSessions.reduce((sum, s) => sum + s.durationMinutes, 0) / completedSessions.length)
+                : 0;
 
             // KPIs
-            document.getElementById('kpiTotal').textContent = total;
-            document.getElementById('kpiOccupied').textContent = occupied;
-            document.getElementById('kpiViolations').textContent = activeViol;
-            document.getElementById('kpiFees').textContent = `RM${fees}`;
-            document.getElementById('kpiOccupancyPct').textContent = total ? Math.round((occupied / total) * 100) + '%' : '0%';
-            document.getElementById('kpiCompounded').textContent = compounded;
+            document.getElementById('kpiTotal').textContent = totalLots;
+            document.getElementById('kpiZonesCount').textContent = zones.length + ' zones';
+            document.getElementById('kpiOccupied').textContent = activeSessionsCount;
+            document.getElementById('kpiOccupancyPct').textContent = totalLots ? Math.round((activeSessionsCount / totalLots) * 100) + '%' : '0%';
+            document.getElementById('kpiCompliance').textContent = avgCompliance.toFixed(1) + '%';
+            document.getElementById('kpiComplianceStatus').textContent = complianceStatus;
+            document.getElementById('kpiComplianceStatus').style.color = complianceStatusColor;
+            document.getElementById('kpiAvgDuration').textContent = avgDuration + ' min';
 
-            // Donut
-            buildDonut(Math.max(0, available), Math.max(0, occupied - violBays), violBays);
+            // Donut - compliance distribution (uses same activeByZone as KPIs)
+            let greenZones = 0, orangeZones = 0, redZones = 0;
+            zones.forEach(z => {
+                const rate = ((activeByZone[z.id] || 0) / z.totalLots) * 100;
+                if (rate >= 80) greenZones++;
+                else if (rate >= 50) orangeZones++;
+                else redZones++;
+            });
+
+            buildDonut(greenZones, orangeZones, redZones);
+
+            // Render zone grid
+            renderZoneGrid();
+
+            // Render session history
+            renderSessionHistory();
 
             // Historical charts — only render, don't re-append live ticks
-            buildOccupancyLine();
-            buildViolLine();
+            buildComplianceLine();
+            buildSessionLine();
+            buildSessionBar();
             buildFeeChart();
             buildPeakChart();
-
-            // Violations by bay — merge historical + live
-            const bayLabels = bays.map(b => b.number);
-            const bayViolCounts = bays.map((b, i) => {
-                const liveCount = allViol.filter(v => Number(v.bayId) === b.id).length;
-                const histCount = violByBayData[i] || 0;
-                return Math.max(liveCount, histCount);
-            });
-            buildViolBar(bayLabels, bayViolCounts);
-
-            renderSensorGrid();
-            renderViolationHistory();
         }
 
         // ---- Load 7-day historical data from Firebase ----
@@ -828,20 +865,22 @@
                 return;
             }
 
-            const bays = window.BAYS || [];
+            const zones = window.ZONES || [];
 
             try {
                 const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-                // ---- Snapshots — aggregate by day ----
+                // ---- Compliance snapshots — aggregate by day ----
                 const snapSnap = await window.firebaseDB
-                    .ref('history/snapshots')
-                    .orderByChild('timestamp')
-                    .startAt(cutoff)
-                    .once('value');
+                    .collection('complianceSnapshots')
+                    .where('timestamp', '>=', cutoff)
+                    .orderBy('timestamp')
+                    .get();
 
-                const snapData = snapSnap.val() || {};
-                const snapPoints = Object.values(snapData).sort((a, b) => a.timestamp - b.timestamp);
+                const snapPoints = [];
+                snapSnap.forEach(doc => {
+                    snapPoints.push(doc.data());
+                });
 
                 if (snapPoints.length > 0) {
                     // Group snapshots by date string — ONLY during operating hours (06:00–17:59)
@@ -851,17 +890,17 @@
                         const h = dt.getHours();
                         if (h < 6 || h >= 18) return; // skip non-operating hours
                         const day = dt.toISOString().split('T')[0];
-                        if (!byDay[day]) byDay[day] = { occupied: [], violations: [] };
-                        byDay[day].occupied.push(p.occupied);
-                        byDay[day].violations.push(p.violations);
+                        if (!byDay[day]) byDay[day] = { compliance: [], sessions: [] };
+                        byDay[day].compliance.push(p.complianceRate);
+                        byDay[day].sessions.push(p.activeSessions);
                     });
 
                     const days = Object.keys(byDay).sort();
 
-                    // Occupancy: average occupied per day (operating hours only)
-                    occupancyHistory = days.map(day => ({
+                    // Compliance: average compliance per day (operating hours only)
+                    complianceHistory = days.map(day => ({
                         label: new Date(day + 'T12:00:00').toLocaleDateString('en-MY', { weekday: 'short', month: 'short', day: 'numeric' }),
-                        value: parseFloat((byDay[day].occupied.reduce((s, v) => s + v, 0) / byDay[day].occupied.length).toFixed(1))
+                        value: parseFloat((byDay[day].compliance.reduce((s, v) => s + v, 0) / byDay[day].compliance.length).toFixed(1))
                     }));
 
                     // Peak hours — group by hour across all 7 days (operating hours only)
@@ -870,7 +909,7 @@
                     snapPoints.forEach(p => {
                         const h = new Date(p.timestamp).getHours();
                         if (h < 6 || h >= 18) return;
-                        hourBuckets[h] += p.occupied;
+                        hourBuckets[h] += p.activeSessions;
                         hourCounts[h]++;
                     });
                     peakHoursData = hourBuckets.map((total, h) => ({
@@ -878,23 +917,24 @@
                         value: hourCounts[h] ? parseFloat((total / hourCounts[h]).toFixed(1)) : 0
                     }));
 
-                    violByBayData = bays.map(() => 0); // will be enriched from violations node below
-
                 } else {
                     peakHoursData = Array.from({ length: 24 }, (_, h) => ({
                         label: `${String(h).padStart(2, '0')}:00`, value: 0
                     }));
                 }
 
-                // ---- Daily summary — fees + violations + sessions ----
+                // ---- Daily summary — fees + sessions ----
                 const dailySnap = await window.firebaseDB
-                    .ref('dailySummary')
-                    .orderByKey()
-                    .limitToLast(7)
-                    .once('value');
+                    .collection('dailySummary')
+                    .where('date', '>=', new Date(cutoff).toISOString().split('T')[0])
+                    .orderBy('date')
+                    .get();
 
-                const dailyData = dailySnap.val() || {};
-                const sortedDays = Object.values(dailyData).sort((a, b) =>
+                const dailyData = [];
+                dailySnap.forEach(doc => {
+                    dailyData.push(doc.data());
+                });
+                const sortedDays = dailyData.sort((a, b) =>
                     (a.date || '') > (b.date || '') ? 1 : -1);
 
                 feeHistory = sortedDays.map(d => ({
@@ -904,25 +944,21 @@
                     value: d.feesCollected || 0
                 }));
 
-                // BUG FIX: Use dailySummary.totalViolations for the violations chart
-                // (snapshot violations field is per-snapshot count, not daily total)
-                violationHistory = sortedDays.map(d => ({
+                // Session history for the sessions chart
+                sessionHistory = sortedDays.map(d => ({
                     label: new Date(d.date + 'T12:00:00').toLocaleDateString('en-MY', {
                         weekday: 'short', month: 'short', day: 'numeric'
                     }),
-                    value: d.totalViolations || 0
+                    value: d.totalSessions || 0
                 }));
 
                 // Historical KPI totals
                 const hist7Sessions = sortedDays.reduce((s, d) => s + (d.totalSessions || 0), 0);
-                const hist7Violations = sortedDays.reduce((s, d) => s + (d.totalViolations || 0), 0);
                 const hist7Fees = sortedDays.reduce((s, d) => s + (d.feesCollected || 0), 0);
 
                 const kpiSessions = document.getElementById('kpiSessions');
-                const kpiHistViol = document.getElementById('kpiHistViolations');
                 const kpiHistFees = document.getElementById('kpiHistFees');
                 if (kpiSessions) kpiSessions.textContent = hist7Sessions;
-                if (kpiHistViol) kpiHistViol.textContent = hist7Violations;
                 if (kpiHistFees) kpiHistFees.textContent = `RM${hist7Fees.toLocaleString()}`;
 
                 if (feeHistory.length === 0) {
@@ -936,21 +972,10 @@
                     });
                 }
 
-                // ---- Violations by bay — read from /violations node ----
-                const violSnap = await window.firebaseDB
-                    .ref('violations')
-                    .once('value');
-
-                const violData = violSnap.val() || {};
-                violByBayData = bays.map(bay =>
-                    Object.values(violData).filter(v => Number(v.bayId) === bay.id).length
-                );
-
                 historicalLoaded = true;
                 console.log('[Dashboard] Historical data loaded:', {
-                    snapshots: snapData ? Object.keys(snapData).length : 0,
-                    days: sortedDays.length,
-                    violations: Object.keys(violData).length
+                    snapshots: snapPoints.length,
+                    days: sortedDays.length
                 });
 
             } catch (e) {
@@ -959,7 +984,7 @@
                     label: `${String(h).padStart(2, '0')}:00`, value: 0
                 }));
                 feeHistory = [];
-                violByBayData = bays.map(() => 0);
+                sessionHistory = [];
                 historicalLoaded = true;
             }
 
@@ -969,9 +994,68 @@
         // ---- Hook into Firebase push events ----
         window.addEventListener('parkingDataUpdated', updateDashboard);
 
+        // ---- Debug Calculation Function ----
+        function runDebugCalculation() {
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
+            const currentTime = Date.now();
+
+            // Same bucketing as KPIs / Map: time-window active + GPS containment
+            const { activeByZone, totalActive } = bucketActiveByZone(sessions, zones, currentTime);
+            const totalInZone = Object.values(activeByZone).reduce((a, b) => a + b, 0);
+            const totalOutside = totalActive - totalInZone;
+
+            let output = `<div style="color: #6366f1; font-weight: bold;">=== COMPLIANCE CALCULATION DEBUG ===</div>`;
+            output += `<div>Current Time (MYT): ${new Date(currentTime).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', hour12: false })}</div>`;
+            output += `<div>Total Zones: ${zones.length}</div>`;
+            output += `<div>Total Sessions: ${sessions.length}</div>`;
+            output += `<div>Truly Active (time-window): ${totalActive} &nbsp; | &nbsp; In-Zone: ${totalInZone} &nbsp; | &nbsp; Outside Zone: ${totalOutside}</div>`;
+            output += `<br>`;
+
+            zones.forEach(zone => {
+                const activeInZone = activeByZone[zone.id] || 0;
+                const complianceRate = (activeInZone / zone.totalLots) * 100;
+                let statusColor = 'green';
+                if (complianceRate < 50) statusColor = 'red';
+                else if (complianceRate < 80) statusColor = 'orange';
+
+                const statusEmoji = statusColor === 'green' ? '🟢' : statusColor === 'orange' ? '🟠' : '🔴';
+
+                output += `<div style="margin-bottom: 12px; padding: 8px; background: rgba(0,0,0,0.05); border-left: 3px solid ${getStatusColorHex(statusColor)};">`;
+                output += `<div style="font-weight: bold;">${statusEmoji} ${zone.name} (${zone.id})</div>`;
+                output += `<div style="margin-left: 12px;">Total Lots: ${zone.totalLots}</div>`;
+                output += `<div style="margin-left: 12px;">Active Sessions (by GPS): ${activeInZone}</div>`;
+                output += `<div style="margin-left: 12px;">Compliance Rate: <strong>${complianceRate.toFixed(1)}%</strong></div>`;
+                output += `<div style="margin-left: 12px;">Status: <strong style="color: ${getStatusColorHex(statusColor)};">${statusColor.toUpperCase()}</strong></div>`;
+                output += `</div>`;
+            });
+
+            output += `<div style="color: #6366f1; font-weight: bold; margin-top: 8px;">=== END DEBUG ===</div>`;
+
+            document.getElementById('debugOutput').innerHTML = output;
+        }
+
         // ---- Boot ----
         $(document).ready(() => {
-            setTimeout(loadHistoricalData, 600);
+            console.log('[Dashboard] Booting...');
+
+            // Directly load dummy data if available
+            if (typeof DUMMY_ZONES !== 'undefined') {
+                window.ZONES = DUMMY_ZONES;
+                console.log('[Dashboard] Loaded dummy zones:', window.ZONES.length);
+            }
+            if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+                window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+                console.log('[Dashboard] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+            }
+
+            console.log('[Dashboard] window.ZONES:', window.ZONES);
+            console.log('[Dashboard] window.PAYMENT_SESSIONS:', window.PAYMENT_SESSIONS);
+
+            loadHistoricalData();
+            updateDashboard();
+            // Run debug calculation on load
+            setTimeout(runDebugCalculation, 1500);
         });
 
         // ---- Shell messages ----
@@ -980,9 +1064,9 @@
             if (e.data.type === 'refresh') loadHistoricalData();
             if (e.data.type === 'theme') {
                 document.documentElement.setAttribute('data-theme', e.data.value);
-                [donutChart, lineChart, violLineChart, violBarChart, feeChart, peakChart]
+                [donutChart, complianceLineChart, sessionLineChart, sessionBarChart, feeChart, peakChart]
                     .forEach(ch => { if (ch) ch.destroy(); });
-                donutChart = lineChart = violLineChart = violBarChart = feeChart = peakChart = null;
+                donutChart = complianceLineChart = sessionLineChart = sessionBarChart = feeChart = peakChart = null;
                 updateDashboard();
             }
         });

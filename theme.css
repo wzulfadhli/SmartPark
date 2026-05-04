@@ -138,55 +138,10 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .progress { background-color: rgba(255,255,255,0.1); }
 .progress-bar { background-color: var(--accent-primary); }
 
-/* ---- Bay Cards ---- */
-.bay-card {
-    background-color: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
-    cursor: pointer;
-    margin-bottom: 20px;
-    position: relative;
-    box-shadow: var(--card-shadow);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    text-align: left !important;
-}
-.bay-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
-.bay-card.bay-available { background-color: #d1fae5; border-color: #a7f3d0; }
-.bay-card.bay-occupied  { background-color: #e5e7eb; border-color: #d1d5db; }
-.bay-card.bay-violation { background-color: #fee2e2; border-color: #fca5a5; animation: border-pulse 2s infinite; }
-
-[data-theme="dark"] .bay-card.bay-available { background-color: rgba(16,185,129,0.25); border-color: #10b981; }
-[data-theme="dark"] .bay-card.bay-occupied  { background-color: rgba(75,85,99,0.3); border-color: #6b7280; }
-[data-theme="dark"] .bay-card.bay-violation { background-color: rgba(239,68,68,0.25); border-color: #ef4444; }
-
-.status-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    position: absolute;
-    top: 20px; right: 20px;
-}
-.bay-available .status-dot { background-color: #10b981; }
-.bay-occupied .status-dot  { background-color: #3b4256; }
-.bay-violation .status-dot { background-color: #ef4444; }
-
 @keyframes border-pulse {
     0%   { border-color: rgba(239,68,68,0.3); }
     50%  { border-color: rgba(239,68,68,0.8); }
     100% { border-color: rgba(239,68,68,0.3); }
-}
-
-/* ---- Enforcer Alert ---- */
-.enforcer-alert {
-    background-color: rgba(239,68,68,0.1);
-    border: 1px solid rgba(239,68,68,0.2);
-    color: var(--text-primary);
-    padding: 15px;
-    border-radius: 12px;
-    margin-bottom: 12px;
-    animation: slideIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275);
 }
 
 /* ---- Offline Banner ---- */

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SmartPark | Overlay Dashboard</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -198,6 +198,66 @@
             justify-content: space-between;
         }
 
+        /* ---- Layer toggle button ---- */
+        .layer-toggle {
+            position: absolute;
+            top: 100px;
+            left: 20px;
+            z-index: 1000;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            box-shadow: var(--card-shadow);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s;
+        }
+        .layer-toggle:hover { background: var(--surface-hover); }
+        .layer-toggle.active {
+            border-color: var(--accent-success);
+            color: var(--accent-success);
+        }
+        .layer-toggle i { font-size: 0.95rem; }
+
+        /* Payer marker pulse (in-zone) */
+        .payer-icon {
+            background: #6366f1;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            width: 12px !important;
+            height: 12px !important;
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+            animation: payer-pulse 2s infinite;
+        }
+        @keyframes payer-pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6); }
+            70%  { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
+        /* Payer marker — outside any zone (NOT counted in compliance) */
+        .payer-icon-outside {
+            background: #ef4444;
+            border: 2px dashed #fff;
+            border-radius: 4px;
+            width: 14px !important;
+            height: 14px !important;
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: payer-pulse-outside 2s infinite;
+            transform: rotate(45deg);
+        }
+        @keyframes payer-pulse-outside {
+            0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+            70%  { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
         /* ---- Leaflet overrides ---- */
         .leaflet-control-zoom {
             border: none !important;
@@ -242,26 +302,30 @@
     <!-- Apply theme immediately from localStorage (same pattern as other pages) -->
     <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
 
-    <div class="dashboard-title">Parking Sensor Map</div>
+    <div class="dashboard-title">GPS/Geofencing Parking Map</div>
 
     <div class="kpi-overlay">
         <div class="kpi-card">
-            <div class="kpi-label">Total Sensors</div>
-            <div id="kpi-sensors" class="kpi-value">0</div>
+            <div class="kpi-label">Total Zones</div>
+            <div id="kpi-zones" class="kpi-value">0</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Occupied</div>
-            <div id="kpi-occupied" class="kpi-value">0</div>
+            <div class="kpi-label">Active Sessions</div>
+            <div id="kpi-sessions" class="kpi-value">0</div>
         </div>
-        <div class="kpi-card" style="border-top: 3px solid var(--accent-danger);">
-            <div class="kpi-label">Unpaid</div>
-            <div id="kpi-unpaid" class="kpi-value">0</div>
+        <div class="kpi-card" style="border-top: 3px solid var(--accent-success);">
+            <div class="kpi-label">Avg Compliance</div>
+            <div id="kpi-compliance" class="kpi-value">0%</div>
+        </div>
+        <div class="kpi-card" style="border-top: 3px solid #ef4444;" title="Active payers whose GPS location is outside any geofenced zone — not counted in compliance">
+            <div class="kpi-label">Outside Zone</div>
+            <div id="kpi-outside" class="kpi-value">0</div>
         </div>
     </div>
 
     <div class="hotspot-panel open" id="hotspotPanel">
-        <div class="hotspot-panel-header" onclick="toggleHotspotPanel()" title="Toggle hotspot list">
-            <span class="hotspot-panel-title">Live Hotspot Status</span>
+        <div class="hotspot-panel-header" onclick="toggleHotspotPanel()" title="Toggle zone list">
+            <span class="hotspot-panel-title">Zone Compliance Status</span>
             <i class="bi bi-chevron-up hotspot-chevron" id="hotspotChevron"></i>
         </div>
         <div class="hotspot-panel-body" id="hotspotBody">
@@ -269,17 +333,24 @@
         </div>
     </div>
 
+    <button class="layer-toggle" id="payerToggle" onclick="togglePayerLayer()" title="Toggle payer locations">
+        <i class="bi bi-geo-alt-fill"></i>
+        <span id="payerToggleLabel">Show Payers</span>
+    </button>
+
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="geofencing-utils.js"></script>
+    <script src="compliance-utils.js"></script>
+    <script src="dummy-data.js"></script>
+    <script src="app.js"></script>
     <script>
         // ---- Data ----
-        const hotspots = [
-            { name: "Jalan SS15/4", lat: 3.0765, lon: 101.5890, sensors: 50, occupied: 45, paid: 12 },
-            { name: "Jalan SS15/8", lat: 3.0750, lon: 101.5895, sensors: 40, occupied: 38, paid: 28 },
-            { name: "USJ 10 Taipan", lat: 3.0485, lon: 101.5850, sensors: 120, occupied: 95, paid: 88 },
-            { name: "Jalan SS16/1", lat: 3.0820, lon: 101.5865, sensors: 75, occupied: 30, paid: 28 }
-        ];
+        // Zones will be loaded from Firebase (window.ZONES)
+        // Payment sessions will be loaded from Firebase (window.PAYMENT_SESSIONS)
 
         // ---- Tile URLs ----
         const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
@@ -306,60 +377,227 @@
         applyTile(initTheme);
 
         // ---- Status helper ----
-        function getStyle(occ, paid) {
-            const ratio = (paid / occ) * 100;
-            if (ratio < 50) return { color: 'var(--accent-danger)', hex: '#ef4444', text: 'Critical' };
-            if (ratio <= 80) return { color: 'var(--accent-warning)', hex: '#f59e0b', text: 'Warning' };
-            return { color: 'var(--accent-success)', hex: '#10b981', text: 'Healthy' };
+        function getComplianceStyle(complianceRate) {
+            if (complianceRate >= 80) return { color: 'var(--accent-success)', hex: '#10b981', text: 'High' };
+            if (complianceRate >= 50) return { color: 'var(--accent-warning)', hex: '#f59e0b', text: 'Medium' };
+            return { color: 'var(--accent-danger)', hex: '#ef4444', text: 'Low' };
         }
 
-        // ---- Render hotspots ----
-        let totalSens = 0, totalOcc = 0, totalPaid = 0;
-        const list = document.getElementById('list-container');
+        // ---- Render zones ----
+        let zoneMarkers = [];
+        let totalLots = 0, totalSessions = 0, totalCompliance = 0;
 
-        hotspots.forEach(spot => {
-            const style = getStyle(spot.occupied, spot.paid);
-            const compliance = (spot.paid / spot.occupied * 100).toFixed(0);
+        // ---- Payer markers (individual active sessions) ----
+        let payerLayer = L.layerGroup();
+        let payersVisible = false;
 
-            totalSens += spot.sensors;
-            totalOcc += spot.occupied;
-            totalPaid += spot.paid;
+        // Deterministic scatter so each session keeps the same offset across re-renders
+        function scatterOffset(seed, radiusMeters) {
+            // Hash seed string into 2 floats in [0,1)
+            let h = 0;
+            for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+            const r1 = ((h & 0xffff) / 0xffff);
+            const r2 = (((h >>> 16) & 0xffff) / 0xffff);
+            // Random point inside circle
+            const angle = r1 * 2 * Math.PI;
+            const dist = Math.sqrt(r2) * radiusMeters * 0.8; // 80% of radius
+            // Convert meters to lat/lng deltas (rough)
+            const dLat = (dist * Math.cos(angle)) / 111320;
+            const dLng = (dist * Math.sin(angle)) / (111320 * Math.cos(0));
+            return { dLat, dLng };
+        }
 
-            // Circle marker
-            L.circleMarker([spot.lat, spot.lon], {
-                radius: 14,
-                fillColor: style.hex,
-                color: '#fff',
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 0.75
-            }).addTo(map).bindPopup(
-                `<b>${spot.name}</b><br>
-                 Total Spots: ${spot.sensors}<br>
-                 Occupied: ${spot.occupied}<br>
-                 Compliance: ${compliance}%`
-            );
+        // Resolve a session's effective zone via geofence containment (GPS is source of truth).
+        // If the session has no location, fall back to the declared zoneId.
+        function resolveSessionZone(session, zones) {
+            if (session.location && session.location.lat != null) {
+                return findZoneContainingLocation(session.location, zones);
+            }
+            return zones.find(z => z.id === session.zoneId) || null;
+        }
 
-            // Hotspot panel row
-            const row = document.createElement('div');
-            row.className = 'hotspot-row';
-            row.innerHTML = `
-                <div class="street-name">${spot.name}</div>
-                <div class="progress-track">
-                    <div class="progress-fill" style="width:${compliance}%; background-color:${style.hex};"></div>
-                </div>
-                <div class="stat-line">
-                    <span>${spot.occupied} Occupied</span>
-                    <span style="color:${style.hex}; font-weight:600;">${compliance}% Paid</span>
-                </div>
-            `;
-            list.appendChild(row);
-        });
+        function renderPayers() {
+            payerLayer.clearLayers();
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
 
-        // KPI totals
-        document.getElementById('kpi-sensors').textContent = totalSens;
-        document.getElementById('kpi-occupied').textContent = totalOcc;
-        document.getElementById('kpi-unpaid').textContent = totalOcc - totalPaid;
+            const now = Date.now();
+            sessions
+                .filter(s => s.status === 'active' && now >= s.startTime && now <= s.endTime)
+                .forEach(session => {
+                const remainingMs = session.endTime - Date.now();
+                const remainingMin = Math.max(0, Math.round(remainingMs / 60000));
+                const containingZone = resolveSessionZone(session, zones);
+
+                // Outside every geofence → red diamond marker
+                if (!containingZone) {
+                    const lat = session.location?.lat;
+                    const lng = session.location?.lng;
+                    if (lat == null || lng == null) return;
+
+                    const icon = L.divIcon({
+                        className: 'payer-icon-outside',
+                        iconSize: [14, 14]
+                    });
+                    const marker = L.marker([lat, lng], { icon }).bindPopup(
+                        `<b>${session.vehicleId || 'Vehicle'}</b><br>
+                         <span style="color:#ef4444;font-weight:600;">⚠ Outside Geofenced Zone</span><br>
+                         Session: ${session.sessionId.substr(0, 12)}…<br>
+                         Remaining: ${remainingMin} min<br>
+                         <small style="color:var(--text-secondary);">Not counted in zone compliance</small>`
+                    );
+                    payerLayer.addLayer(marker);
+                    return;
+                }
+
+                // Inside a geofence → indigo dot (use real GPS, or scatter if at center)
+                let lat = session.location?.lat ?? containingZone.center.lat;
+                let lng = session.location?.lng ?? containingZone.center.lng;
+                const isAtCenter = lat === containingZone.center.lat && lng === containingZone.center.lng;
+                if (isAtCenter) {
+                    const { dLat, dLng } = scatterOffset(session.sessionId, containingZone.radius || 50);
+                    lat += dLat;
+                    lng += dLng;
+                }
+
+                const mismatched = session.zoneId && session.zoneId !== containingZone.id;
+                const icon = L.divIcon({
+                    className: 'payer-icon',
+                    iconSize: [12, 12]
+                });
+                const marker = L.marker([lat, lng], { icon }).bindPopup(
+                    `<b>${session.vehicleId || 'Vehicle'}</b><br>
+                     Zone: ${containingZone.name}<br>
+                     Session: ${session.sessionId.substr(0, 12)}…<br>
+                     Remaining: ${remainingMin} min
+                     ${mismatched ? `<br><small style="color:#f59e0b;">⚠ Paid for ${session.zoneName || session.zoneId}, parked in ${containingZone.name}</small>` : ''}`
+                );
+                payerLayer.addLayer(marker);
+            });
+        }
+
+        function togglePayerLayer() {
+            payersVisible = !payersVisible;
+            const btn = document.getElementById('payerToggle');
+            const label = document.getElementById('payerToggleLabel');
+            if (payersVisible) {
+                renderPayers();
+                payerLayer.addTo(map);
+                btn.classList.add('active');
+                label.textContent = 'Hide Payers';
+            } else {
+                map.removeLayer(payerLayer);
+                btn.classList.remove('active');
+                label.textContent = 'Show Payers';
+            }
+        }
+
+        function renderZones() {
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
+            const list = document.getElementById('list-container');
+
+            // Clear existing markers
+            zoneMarkers.forEach(marker => map.removeLayer(marker));
+            zoneMarkers = [];
+            list.innerHTML = '';
+
+            totalLots = 0;
+            totalSessions = 0;
+            totalCompliance = 0;
+
+            // Bucket each truly-active session (paid + within time window) into its
+            // containing zone by GPS, not by stored zoneId.
+            const now = Date.now();
+            const activeByZone = {};
+            let activeOutside = 0;
+            sessions.forEach(s => {
+                if (s.status !== 'active') return;
+                if (now < s.startTime || now > s.endTime) return;
+                const z = resolveSessionZone(s, zones);
+                if (z) activeByZone[z.id] = (activeByZone[z.id] || 0) + 1;
+                else activeOutside++;
+            });
+
+            zones.forEach(zone => {
+                const activeInZone = activeByZone[zone.id] || 0;
+                const complianceRate = (activeInZone / zone.totalLots) * 100;
+                const style = getComplianceStyle(complianceRate);
+
+                totalLots += zone.totalLots;
+                totalSessions += activeInZone;
+                totalCompliance += complianceRate;
+
+                // Circle marker for zone center
+                const marker = L.circleMarker([zone.center.lat, zone.center.lng], {
+                    radius: 14,
+                    fillColor: style.hex,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.75
+                }).addTo(map).bindPopup(
+                    `<b>${zone.name}</b><br>
+                     Total Lots: ${zone.totalLots}<br>
+                     Active Sessions: ${activeInZone}<br>
+                     Compliance: ${complianceRate.toFixed(1)}%<br>
+                     Status: ${style.text}`
+                );
+
+                // Add geofence circle
+                const geofence = L.circle([zone.center.lat, zone.center.lng], {
+                    radius: zone.radius,
+                    fillColor: style.hex,
+                    color: style.hex,
+                    weight: 2,
+                    opacity: 0.3,
+                    fillOpacity: 0.1
+                }).addTo(map);
+
+                zoneMarkers.push(marker, geofence);
+
+                // Zone panel row
+                const row = document.createElement('div');
+                row.className = 'hotspot-row';
+                row.innerHTML = `
+                    <div class="street-name">${zone.name}</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width:${complianceRate}%; background-color:${style.hex};"></div>
+                    </div>
+                    <div class="stat-line">
+                        <span>${activeInZone} / ${zone.totalLots} Active</span>
+                        <span style="color:${style.hex}; font-weight:600;">${complianceRate.toFixed(1)}%</span>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+
+            // KPI totals
+            document.getElementById('kpi-zones').textContent = zones.length;
+            document.getElementById('kpi-sessions').textContent = totalSessions;
+            const avgCompliance = zones.length > 0 ? totalCompliance / zones.length : 0;
+            document.getElementById('kpi-compliance').textContent = avgCompliance.toFixed(1) + '%';
+
+            document.getElementById('kpi-outside').textContent = activeOutside;
+
+            // Refresh payer markers if currently visible
+            if (payersVisible) renderPayers();
+        }
+
+        // Initial render
+        // Directly load dummy data if available
+        if (typeof DUMMY_ZONES !== 'undefined') {
+            window.ZONES = DUMMY_ZONES;
+            console.log('[Map] Loaded dummy zones:', window.ZONES.length);
+        }
+        if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+            window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+            console.log('[Map] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+        }
+        setTimeout(renderZones, 1000);
+
+        // Update zones when data changes
+        setInterval(renderZones, 30000);
 
         // ---- Listen for theme changes from the parent shell ----
         window.addEventListener('message', (e) => {

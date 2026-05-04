@@ -1,5 +1,5 @@
-const CACHE_NAME = 'smart-parking-v6';
-const DYNAMIC_CACHE = 'smart-parking-dynamic-v6';
+const CACHE_NAME = 'smartpark-v7';
+const DYNAMIC_CACHE = 'smartpark-dynamic-v7';
 
 // Assets to cache on install — use relative paths for GitHub Pages subdirectory hosting
 const STATIC_ASSETS = [
@@ -9,6 +9,9 @@ const STATIC_ASSETS = [
     './map.html',
     './theme.css',
     './app.js',
+    './geofencing-utils.js',
+    './compliance-utils.js',
+    './dummy-data.js',
     './manifest.json',
     './offline.html',
     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
@@ -16,7 +19,7 @@ const STATIC_ASSETS = [
     'https://code.jquery.com/jquery-4.0.0-beta.min.js',
     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
     'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js'
+    'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js'
 ];
 
 // Install Service Worker
@@ -161,10 +164,6 @@ self.addEventListener('sync', event => {
     if (event.tag === 'sync-parking-data') {
         event.waitUntil(syncParkingData());
     }
-
-    if (event.tag === 'sync-violations') {
-        event.waitUntil(syncViolations());
-    }
 });
 
 // Push Notifications
@@ -173,9 +172,9 @@ self.addEventListener('push', event => {
 
     let data = {
         title: 'Parking Alert',
-        body: 'New notification from Smart Parking Sensor System System',
+        body: 'New notification from SmartPark 2.0',
         icon: '/icons/icon-192x192.png',
-        badge: '/icons/badge-72x72.png',
+        badge: '/icons/icon-72x72.png',
         vibrate: [200, 100, 200],
         tag: 'parking-alert',
         renotify: true,
@@ -315,7 +314,35 @@ async function syncParkingData() {
 // Helper function to sync violations
 async function syncViolations() {
     console.log('[SW] Syncing violations...');
-    // Implementation similar to syncParkingData
+
+    try {
+        const cache = await caches.open(DYNAMIC_CACHE);
+        const requests = await cache.keys();
+
+        for (let request of requests) {
+            if (request.url.includes('/api/parking/violations')) {
+                const response = await cache.match(request);
+                const data = await response.json();
+
+                // Send to server when online
+                await fetch('/api/parking/violations/sync', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                // Remove from cache after successful sync
+                await cache.delete(request);
+            }
+        }
+
+        console.log('[SW] Violations synced successfully');
+    } catch (error) {
+        console.error('[SW] Failed to sync violations:', error);
+        throw error;
+    }
 }
 
 // Helper function to check parking status in background
@@ -326,19 +353,18 @@ async function checkParkingStatus() {
         const response = await fetch('/api/parking/status');
         const data = await response.json();
 
-        // Check for violations
-        const violations = data.violations || [];
+        // Check for low compliance zones
+        const lowComplianceZones = data.lowComplianceZones || [];
 
-        if (violations.length > 0) {
-            // Show notification for violations
-            await self.registration.showNotification('Parking Violation Alert', {
-                body: `${violations.length} vehicle(s) have exceeded parking time`,
+        if (lowComplianceZones.length > 0) {
+            // Show notification for low compliance
+            await self.registration.showNotification('Low Compliance Alert', {
+                body: `${lowComplianceZones.length} zone(s) have low compliance rate`,
                 icon: '/icons/icon-192x192.png',
-                badge: '/icons/badge-72x72.png',
-                vibrate: [200, 100, 200],
-                tag: 'parking-violation',
+                badge: '/icons/icon-72x72.png',
+                tag: 'compliance-alert',
                 data: {
-                    url: '/?view=violations'
+                    url: '/'
                 }
             });
         }
@@ -346,7 +372,6 @@ async function checkParkingStatus() {
         // Cache the status for offline use
         const cache = await caches.open(DYNAMIC_CACHE);
         await cache.put('/api/parking/status', new Response(JSON.stringify(data)));
-
     } catch (error) {
         console.error('[SW] Failed to check parking status:', error);
     }

@@ -3,8 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sensor Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zone Monitor</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
@@ -109,11 +109,11 @@
             <div class="card h-100 p-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <p class="text-muted mb-1 fw-bold small">Total Bays</p>
-                        <h2 class="mb-0 fw-bold" id="totalBays">8</h2>
+                        <p class="text-muted mb-1 fw-bold small">Total Zones</p>
+                        <h2 class="mb-0 fw-bold" id="totalZones">0</h2>
                     </div>
                     <div class="stat-icon bg-light text-secondary">
-                        <i class="bi bi-car-front fs-5"></i>
+                        <i class="bi bi-geo-alt fs-5"></i>
                     </div>
                 </div>
             </div>
@@ -122,10 +122,23 @@
             <div class="card h-100 p-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <p class="text-muted mb-1 fw-bold small">Occupied</p>
-                        <h2 class="mb-0 fw-bold" id="occupiedBays">0</h2>
+                        <p class="text-muted mb-1 fw-bold small">Total Lots</p>
+                        <h2 class="mb-0 fw-bold" id="totalLots">0</h2>
                     </div>
                     <div class="stat-icon" style="background-color:#3b4256;color:white;">
+                        <i class="bi bi-p-square-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card h-100 p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1 fw-bold small">Active Sessions</p>
+                        <h2 class="mb-0 fw-bold" id="activeSessions">0</h2>
+                    </div>
+                    <div class="stat-icon" style="background-color:#d1fae5;color:#10b981;">
                         <i class="bi bi-car-front-fill fs-5"></i>
                     </div>
                 </div>
@@ -135,24 +148,11 @@
             <div class="card h-100 p-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <p class="text-muted mb-1 fw-bold small">Available</p>
-                        <h2 class="mb-0 fw-bold" id="availableBays">8</h2>
-                    </div>
-                    <div class="stat-icon" style="background-color:#d1fae5;color:#10b981;">
-                        <i class="bi bi-car-front fs-5"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card h-100 p-3">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-1 fw-bold small">Violations</p>
-                        <h2 class="mb-0 fw-bold" id="violationCount">0</h2>
+                        <p class="text-muted mb-1 fw-bold small">Avg Compliance</p>
+                        <h2 class="mb-0 fw-bold" id="avgCompliance">0%</h2>
                     </div>
                     <div class="stat-icon" style="background-color:#fecaca;color:#ef4444;">
-                        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                        <i class="bi bi-graph-up-arrow fs-5"></i>
                     </div>
                 </div>
             </div>
@@ -160,7 +160,7 @@
     </div>
 
     <!-- Active Sessions Table -->
-    <h5 class="mb-3 mt-2">Active Sessions</h5>
+    <h5 class="mb-3 mt-2">Active Payment Sessions</h5>
     <div class="row mb-4">
         <div class="col-12">
             <div class="card table-dark-custom">
@@ -169,18 +169,17 @@
                         <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
-                                    <th>Bay ID</th>
-                                    <th>Location</th>
+                                    <th>Session ID</th>
+                                    <th>Zone</th>
+                                    <th>Vehicle</th>
                                     <th>Start Time</th>
                                     <th>Duration</th>
-                                    <th>Type</th>
                                     <th>Status</th>
-                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="activeSessionsTable">
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No active sessions</td>
+                                    <td colspan="6" class="text-center text-muted py-4">No active sessions</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -190,55 +189,154 @@
         </div>
     </div>
 
-    <!-- Bays Grid + Enforcer Panel -->
+    <!-- Zones Grid -->
     <div class="row">
-        <div class="col-md-8 mb-3">
-            <h5 class="mb-2">Parking Bays</h5>
-            <div class="row" id="baysGrid"></div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header py-2" style="background-color: var(--accent-danger) !important; color: white;">
-                    <h6 class="mb-0">
-                        <i class="bi bi-shield-fill"></i> Enforcer Panel
-                        <span class="badge bg-light text-dark ms-2" id="alertBadge">0</span>
-                    </h6>
-                </div>
-                <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="enforcerPanel">
-                    <p class="text-muted text-center small">No active violations</p>
-                </div>
-                <div class="card-footer p-2">
-                    <button class="btn btn-success btn-sm w-100" onclick="compoundAllViolations()">
-                        <i class="bi bi-shield-fill"></i> Compound All
-                    </button>
-                </div>
-            </div>
+        <div class="col-12 mb-3">
+            <h5 class="mb-2">Geofenced Zones</h5>
+            <div class="row" id="zonesGrid"></div>
         </div>
     </div>
-
-    <audio id="alertSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
-        preload="auto"></audio>
 
     <script src="https://code.jquery.com/jquery-4.0.0-beta.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="geofencing-utils.js"></script>
+    <script src="compliance-utils.js"></script>
+    <script src="dummy-data.js"></script>
     <script src="app.js"></script>
 
     <script>
+        // COMPLIANCE_THRESHOLDS is provided as a global by app.js (already loaded above).
+
+        // True if session is paid AND currently within its time window
+        function isSessionActiveNow(s, now) {
+            return s.status === 'active' && now >= s.startTime && now <= s.endTime;
+        }
+
+        // Returns the zone that GPS-contains the session, or its declared zone as fallback
+        function resolveSessionZone(session, zones) {
+            if (session.location && session.location.lat != null) {
+                return findZoneForCoords(session.location, zones);
+            }
+            return zones.find(z => z.id === session.zoneId) || null;
+        }
+
+        // Update monitor with zones and payment sessions
+        function updateMonitor() {
+            const zones = window.ZONES || [];
+            const sessions = window.PAYMENT_SESSIONS || [];
+            const now = Date.now();
+
+            // Bucket each truly-active session by its containing zone (GPS, not stored zoneId)
+            const activeByZone = {};
+            const trulyActive = [];
+            sessions.forEach(s => {
+                if (!isSessionActiveNow(s, now)) return;
+                trulyActive.push(s);
+                const z = resolveSessionZone(s, zones);
+                if (z) activeByZone[z.id] = (activeByZone[z.id] || 0) + 1;
+            });
+
+            // Summary stats
+            const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
+            let totalCompliance = 0;
+            zones.forEach(zone => {
+                const activeInZone = activeByZone[zone.id] || 0;
+                totalCompliance += calculateComplianceRate(activeInZone, zone.totalLots);
+            });
+            const avgCompliance = zones.length > 0 ? totalCompliance / zones.length : 0;
+
+            document.getElementById('totalZones').textContent = zones.length;
+            document.getElementById('totalLots').textContent = totalLots;
+            document.getElementById('activeSessions').textContent = trulyActive.length;
+            document.getElementById('avgCompliance').textContent = avgCompliance.toFixed(1) + '%';
+
+            // Active sessions table
+            try {
+                const tbody = document.getElementById('activeSessionsTable');
+                if (trulyActive.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No active sessions</td></tr>';
+                } else {
+                    tbody.innerHTML = trulyActive.map(s => {
+                        const startTime = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const containingZone = resolveSessionZone(s, zones);
+                        const zoneLabel = containingZone ? containingZone.name : '<span class="text-danger">Outside</span>';
+                        const badge = '<span class="badge bg-success">Active</span>';
+                        const sid = (s.sessionId || '').toString();
+                        return `<tr>
+                            <td class="small">${sid.substring(0, 12)}...</td>
+                            <td>${zoneLabel}</td>
+                            <td>${s.vehicleId || 'N/A'}</td>
+                            <td>${startTime}</td>
+                            <td>${s.durationMinutes} min</td>
+                            <td>${badge}</td>
+                        </tr>`;
+                    }).join('');
+                }
+            } catch (err) {
+                console.error('[Monitor] Failed to render active sessions table:', err);
+                document.getElementById('activeSessionsTable').innerHTML =
+                    `<tr><td colspan="6" class="text-danger py-4">Render error: ${err.message}</td></tr>`;
+            }
+
+            // Zones grid
+            try {
+                const zonesGrid = document.getElementById('zonesGrid');
+                zonesGrid.innerHTML = zones.map(zone => {
+                    const activeInZone = activeByZone[zone.id] || 0;
+                    const complianceRate = calculateComplianceRate(activeInZone, zone.totalLots);
+                    const statusColor = getComplianceStatusColor(complianceRate, COMPLIANCE_THRESHOLDS);
+                    return `<div class="col-6 col-md-4 mb-3">
+                        <div class="card h-100" style="border-left: 4px solid ${getStatusColorHex(statusColor)};">
+                            <div class="card-body">
+                                <h6 class="card-title fw-bold mb-2">${zone.name}</h6>
+                                <div class="small text-muted">Total: ${zone.totalLots} lots</div>
+                                <div class="small text-muted">Active: ${activeInZone} sessions</div>
+                                <div class="small fw-bold" style="color: ${getStatusColorHex(statusColor)};">${complianceRate.toFixed(1)}% compliance</div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                console.error('[Monitor] Failed to render zones grid:', err);
+                document.getElementById('zonesGrid').innerHTML =
+                    `<div class="col-12 text-danger">Render error: ${err.message}</div>`;
+            }
+        }
+
+        function getStatusColorHex(statusColor) {
+            const colors = { green: '#10b981', orange: '#f59e0b', red: '#ef4444' };
+            return colors[statusColor] || '#6b7280';
+        }
+
+        // Re-render when app.js dispatches data updates (e.g., Firebase changes)
+        window.addEventListener('parkingDataUpdated', updateMonitor);
+
         // Listen for commands from parent shell (simulate, reset, refresh, theme)
         window.addEventListener('message', (e) => {
             if (!e.data || !e.data.type) return;
             switch (e.data.type) {
-                case 'simulate': simulateRandomCar(); break;
-                case 'reset': resetAllBays(); break;
-                case 'refresh': refreshData(); break;
+                case 'refresh': updateMonitor(); break;
                 case 'theme':
                     document.documentElement.setAttribute('data-theme', e.data.value);
+                    updateMonitor();
                     break;
             }
         });
+
+        // Initial load
+        // Directly load dummy data if available
+        if (typeof DUMMY_ZONES !== 'undefined') {
+            window.ZONES = DUMMY_ZONES;
+            console.log('[Monitor] Loaded dummy zones:', window.ZONES.length);
+        }
+        if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+            window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+            console.log('[Monitor] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+        }
+        setTimeout(updateMonitor, 1000);
+        setInterval(updateMonitor, 30000);
     </script>
 </body>
 
