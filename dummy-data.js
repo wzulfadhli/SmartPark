@@ -348,7 +348,8 @@ function offsetFromZone(zone, metersBeyondRadius, bearingDeg) {
 for (let i = 178; i <= 185; i++) {
     const session = createSession('zone_ss15_4', `VEH_${i}`, -120, 60);
     session.status = 'completed';
-    session.endTime = DEMO_CURRENT_TIME - 1000; // Ended 1 second ago
+    // Keep endTime consistent with the declared duration
+    session.endTime = session.startTime + (session.durationMinutes * 60 * 1000);
     DUMMY_PAYMENT_SESSIONS.push(session);
 }
 

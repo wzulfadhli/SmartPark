@@ -618,7 +618,7 @@
                     : '<span class="badge bg-warning">Cancelled</span>';
                 return `<tr class="session-row">
                     <td class="fw-bold small">${s.sessionId.substr(0, 12)}...</td>
-                    <td class="text-muted">${(resolveSessionZone(s, zones)?.name) || 'Unknown'}</td>
+                    <td class="text-muted">${(resolveSessionZone(s, zones)?.name) || 'Outside Zone'}</td>
                     <td>${s.vehicleId || 'N/A'}</td>
                     <td class="text-muted">${timeIn} - ${timeOut}</td>
                     <td class="text-muted">${s.durationMinutes} min</td>
