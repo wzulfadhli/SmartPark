@@ -101,18 +101,18 @@ function calculateComplianceSnapshot(activeSessions, totalLots, thresholds) {
  * Filter active payment sessions for a specific zone and time
  * This is a pure function - it only depends on its inputs
  * @param {Array} sessions - Array of payment session objects
- * @param {string} zoneId - Zone ID to filter by
+ * @param {Object} zone - Zone definition to filter by
  * @param {number} currentTime - Current timestamp in milliseconds
  * @returns {Array} Filtered active sessions for the zone
  */
-function getActiveSessionsForZone(sessions, zoneId, currentTime) {
-    if (!Array.isArray(sessions)) {
+function getActiveSessionsForZone(sessions, zone, currentTime) {
+    if (!Array.isArray(sessions) || !zone) {
         return [];
     }
 
     return sessions.filter(session => {
-        // Check if session belongs to the zone
-        if (session.zoneId !== zoneId) {
+        // Check if session location is within the zone geofence
+        if (!session.location || !isLocationInsideZone(session.location, zone)) {
             return false;
         }
 
@@ -138,7 +138,7 @@ function calculateComplianceForAllZones(sessions, zones, currentTime, thresholds
     }
 
     return zones.map(zone => {
-        const activeSessions = getActiveSessionsForZone(sessions, zone.id, currentTime);
+        const activeSessions = getActiveSessionsForZone(sessions, zone, currentTime);
         const snapshot = calculateComplianceSnapshot(
             activeSessions.length,
             zone.totalLots,

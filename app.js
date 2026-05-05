@@ -62,7 +62,7 @@ function initDatabase() {
             // Payment sessions store (replaces old parkingSessions)
             if (!db.objectStoreNames.contains('paymentSessions')) {
                 const s = db.createObjectStore('paymentSessions', { keyPath: 'sessionId' });
-                s.createIndex('zoneId', 'zoneId', { unique: false });
+                s.createIndex('vehicleId', 'vehicleId', { unique: false });
                 s.createIndex('status', 'status', { unique: false });
                 s.createIndex('startTime', 'startTime', { unique: false });
             }
@@ -174,6 +174,7 @@ function initFirebase() {
             snapshot.forEach(doc => {
                 zones.push({ id: doc.id, ...doc.data() });
             });
+            window.ZONES = zones;
             updateAll();
         });
 
@@ -185,6 +186,7 @@ function initFirebase() {
                 snapshot.forEach(doc => {
                     paymentSessions.push({ sessionId: doc.id, ...doc.data() });
                 });
+                window.PAYMENT_SESSIONS = paymentSessions;
                 calculateAndStoreCompliance();
                 updateAll();
             });
@@ -442,8 +444,6 @@ async function createPaymentSession(zoneId, vehicleId, location, durationMinutes
 
     const session = {
         sessionId: sessionId,
-        zoneId: zoneId,
-        zoneName: zone.name,
         vehicleId: vehicleId,
         location: location,
         startTime: now,
@@ -529,7 +529,7 @@ function calculateAndStoreCompliance() {
         if (currentTime < session.startTime || currentTime > session.endTime) return;
         const containingZone = (session.location && session.location.lat != null)
             ? findZoneForCoords(session.location, zones)
-            : zones.find(z => z.id === session.zoneId);
+            : null;
         if (!containingZone) return;
         activeByZone[containingZone.id] = (activeByZone[containingZone.id] || 0) + 1;
     });
@@ -616,12 +616,14 @@ function updateStats() {
     const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
     const activeSessionsCount = paymentSessions.filter(s => s.status === 'active').length;
 
-    // Calculate overall compliance
+    // Calculate overall compliance based on GPS location within geofences
     let totalCompliance = 0;
     zones.forEach(zone => {
-        const activeInZone = paymentSessions.filter(s =>
-            s.zoneId === zone.id && s.status === 'active'
-        ).length;
+        const activeInZone = paymentSessions.filter(s => {
+            if (s.status !== 'active') return false;
+            if (!s.location || s.location.lat == null) return false;
+            return isWithinGeofence(s.location, zone);
+        }).length;
         totalCompliance += calculateComplianceRate(activeInZone, zone.totalLots);
     });
     const avgCompliance = zones.length > 0 ? totalCompliance / zones.length : 0;

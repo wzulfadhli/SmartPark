@@ -10,6 +10,15 @@
 // In production, this would be Date.now()
 const DEMO_CURRENT_TIME = Date.now();
 
+// Seeded pseudo-random generator so dummy data is deterministic across page loads.
+// (Each page loads this file independently; without a seed, Math.random() produces
+// different locations per page, making zone counts differ.)
+let _seed = 12345;
+function seededRandom() {
+    _seed = (_seed * 16807 + 0) % 2147483647;
+    return (_seed - 1) / 2147483646;
+}
+
 // ============================================================
 // GEOFENCED ZONES
 // ============================================================
@@ -68,12 +77,23 @@ function createSession(zoneId, vehicleId, startOffsetMinutes, durationMinutes) {
     const endTime = startTime + (durationMinutes * 60 * 1000);
     const zone = DUMMY_ZONES.find(z => z.id === zoneId);
 
+    // Generate a realistic GPS location within the zone's radius
+    let location;
+    if (zone && zone.center) {
+        const radius = zone.radius || 100;
+        const angle = seededRandom() * 2 * Math.PI;
+        const dist = Math.sqrt(seededRandom()) * radius * 0.8; // keep within 80% of radius
+        const dLat = (dist * Math.cos(angle)) / 111320;
+        const dLng = (dist * Math.sin(angle)) / (111320 * Math.cos(zone.center.lat * Math.PI / 180));
+        location = { lat: zone.center.lat + dLat, lng: zone.center.lng + dLng };
+    } else {
+        location = { lat: 0, lng: 0 };
+    }
+
     return {
-        sessionId: `session_${Math.random().toString(36).substr(2, 9)}`,
-        zoneId: zoneId,
-        zoneName: zone ? zone.name : zoneId,
+        sessionId: `session_${seededRandom().toString(36).substr(2, 9)}`,
         vehicleId: vehicleId,
-        location: zone ? zone.center : { lat: 0, lng: 0 },
+        location: location,
         startTime: startTime,
         endTime: endTime,
         durationMinutes: durationMinutes,
@@ -284,9 +304,7 @@ function createOutsideSession(vehicleId, lat, lng, startOffsetMinutes, durationM
     const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
     const endTime = startTime + (durationMinutes * 60 * 1000);
     return {
-        sessionId: `session_${Math.random().toString(36).substr(2, 9)}`,
-        zoneId: null,                    // <-- Not assigned to any zone
-        zoneName: 'Outside Zone',
+        sessionId: `session_${seededRandom().toString(36).substr(2, 9)}`,
         vehicleId: vehicleId,
         location: { lat, lng },
         startTime: startTime,

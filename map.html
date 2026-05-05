@@ -408,12 +408,11 @@
         }
 
         // Resolve a session's effective zone via geofence containment (GPS is source of truth).
-        // If the session has no location, fall back to the declared zoneId.
         function resolveSessionZone(session, zones) {
             if (session.location && session.location.lat != null) {
                 return findZoneContainingLocation(session.location, zones);
             }
-            return zones.find(z => z.id === session.zoneId) || null;
+            return null;
         }
 
         function renderPayers() {
@@ -460,7 +459,6 @@
                     lng += dLng;
                 }
 
-                const mismatched = session.zoneId && session.zoneId !== containingZone.id;
                 const icon = L.divIcon({
                     className: 'payer-icon',
                     iconSize: [12, 12]
@@ -469,8 +467,7 @@
                     `<b>${session.vehicleId || 'Vehicle'}</b><br>
                      Zone: ${containingZone.name}<br>
                      Session: ${session.sessionId.substr(0, 12)}…<br>
-                     Remaining: ${remainingMin} min
-                     ${mismatched ? `<br><small style="color:#f59e0b;">⚠ Paid for ${session.zoneName || session.zoneId}, parked in ${containingZone.name}</small>` : ''}`
+                     Remaining: ${remainingMin} min`
                 );
                 payerLayer.addLayer(marker);
             });

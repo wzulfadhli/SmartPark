@@ -169,6 +169,51 @@
             font-size: 0.85rem;
         }
 
+        /* Scrollable table with fixed height */
+        .table-scroll {
+            max-height: 360px;
+            overflow-y: auto;
+        }
+        .table-scroll thead th {
+            position: sticky;
+            top: 0;
+            background-color: var(--surface-color);
+            z-index: 2;
+            box-shadow: 0 2px 0 var(--border-color);
+        }
+        [data-theme="dark"] .table-scroll thead th {
+            background-color: #1e293b;
+            box-shadow: 0 2px 0 #334155;
+        }
+
+        /* Table filter bar */
+        .table-filters {
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--surface-color);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .table-filters select, .table-filters input {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+        .table-filters select:focus, .table-filters input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+        .filter-count {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-left: auto;
+        }
+
         /* Section headers */
         .section-header {
             display: flex;
@@ -396,8 +441,22 @@
         <small class="text-muted" id="sessionHistoryCount">0 records</small>
     </div>
     <div class="card table-dark-custom mb-4">
+        <div class="table-filters">
+            <select id="filterHistoryZone">
+                <option value="">All Zones</option>
+                <option value="outside">Outside Zone</option>
+            </select>
+            <select id="filterHistoryStatus">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+            <input type="text" id="filterHistorySearch" placeholder="Search vehicle or session...">
+            <span class="filter-count" id="filterHistoryCount"></span>
+        </div>
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-responsive table-scroll">
                 <table class="table mb-0">
                     <thead>
                         <tr>
@@ -442,12 +501,12 @@
         function isSessionActiveNow(s, now) {
             return s.status === 'active' && now >= s.startTime && now <= s.endTime;
         }
-        // Returns the zone that GPS-contains the session, or its declared zone as fallback.
+        // Returns the zone that GPS-contains the session.
         function resolveSessionZone(session, zones) {
             if (session.location && session.location.lat != null) {
                 return findZoneForCoords(session.location, zones);
             }
-            return zones.find(z => z.id === session.zoneId) || null;
+            return null;
         }
         // Build { zoneId -> activeCount } and return total truly-active count.
         function bucketActiveByZone(sessions, zones, now) {
@@ -585,7 +644,7 @@
             const sessions = window.PAYMENT_SESSIONS || [];
             const zoneLabels = zones.map(z => z.name);
             const zoneSessionCounts = zones.map(z =>
-                sessions.filter(s => s.zoneId === z.id).length
+                sessions.filter(s => s.location && isWithinGeofence(s.location, z)).length
             );
 
             const ctx = document.getElementById('sessionsBar').getContext('2d');
@@ -756,13 +815,43 @@
         function renderSessionHistory() {
             const tbody = document.getElementById('sessionHistoryTable');
             const sessions = window.PAYMENT_SESSIONS || [];
+            const zones = window.ZONES || [];
+
+            // Populate zone filter dropdown
+            const zoneFilter = document.getElementById('filterHistoryZone');
+            const currentZoneVal = zoneFilter.value;
+            zoneFilter.innerHTML = '<option value="">All Zones</option><option value="outside">Outside Zone</option>';
+            zones.forEach(z => {
+                zoneFilter.innerHTML += `<option value="${z.id}">${z.name}</option>`;
+            });
+            if (currentZoneVal) zoneFilter.value = currentZoneVal;
+
+            // Apply filters
+            const statusVal = document.getElementById('filterHistoryStatus').value;
+            const searchVal = document.getElementById('filterHistorySearch').value.trim().toLowerCase();
+            const filtered = sessions.filter(s => {
+                const containingZone = resolveSessionZone(s, zones);
+                if (zoneFilter.value === 'outside') {
+                    if (containingZone) return false;
+                } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
+                if (statusVal && s.status !== statusVal) return false;
+                if (searchVal) {
+                    const hay = ((s.sessionId || '') + ' ' + (s.vehicleId || '')).toLowerCase();
+                    if (!hay.includes(searchVal)) return false;
+                }
+                return true;
+            });
+
             document.getElementById('sessionHistoryCount').textContent =
-                `${sessions.length} record${sessions.length !== 1 ? 's' : ''}`;
-            if (!sessions.length) {
+                `${filtered.length} record${filtered.length !== 1 ? 's' : ''}`;
+            document.getElementById('filterHistoryCount').textContent =
+                filtered.length === sessions.length ? '' : `${filtered.length} of ${sessions.length}`;
+
+            if (!filtered.length) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No payment sessions yet</td></tr>';
                 return;
             }
-            const sorted = [...sessions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const sorted = [...filtered].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             tbody.innerHTML = sorted.map(s => {
                 const timeIn = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const timeOut = new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -773,7 +862,7 @@
                     : '<span class="badge bg-warning">Cancelled</span>';
                 return `<tr class="session-row">
                     <td class="fw-bold small">${s.sessionId.substr(0, 12)}...</td>
-                    <td class="text-muted">${s.zoneName || s.zoneId}</td>
+                    <td class="text-muted">${(resolveSessionZone(s, zones)?.name) || 'Unknown'}</td>
                     <td>${s.vehicleId || 'N/A'}</td>
                     <td class="text-muted">${timeIn} - ${timeOut}</td>
                     <td class="text-muted">${s.durationMinutes} min</td>
@@ -1051,6 +1140,11 @@
 
             console.log('[Dashboard] window.ZONES:', window.ZONES);
             console.log('[Dashboard] window.PAYMENT_SESSIONS:', window.PAYMENT_SESSIONS);
+
+            // Filter listeners
+            document.getElementById('filterHistoryZone').addEventListener('change', renderSessionHistory);
+            document.getElementById('filterHistoryStatus').addEventListener('change', renderSessionHistory);
+            document.getElementById('filterHistorySearch').addEventListener('input', renderSessionHistory);
 
             loadHistoricalData();
             updateDashboard();
