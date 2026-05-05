@@ -11,7 +11,7 @@
     <meta name="description" content="SmartPark 2.0 — GPS/Geofencing Parking Compliance System">
     <title>SmartPark 2.0</title>
 
-    <link rel="manifest" href="manifest.json">
+    <!-- <link rel="manifest" href="manifest.json"> -->
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
 
@@ -23,12 +23,14 @@
         html,
         body {
             height: 100%;
+            height: 100dvh; /* dynamic viewport for mobile chrome */
             overflow: hidden;
         }
 
         .app-shell {
             display: flex;
-            height: 100vh;
+            height: 100vh; /* fallback */
+            height: 100dvh; /* dynamic viewport for mobile chrome */
             overflow: hidden;
             /* Prevent any horizontal overflow leaking out */
             max-width: 100vw;
@@ -225,6 +227,10 @@
             align-items: center;
             padding: 0 24px;
             gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            flex-shrink: 0;
         }
 
         .topbar-title {
@@ -407,7 +413,7 @@
 
                 <button class="nav-item-btn" id="nav-map" onclick="navigate('map')">
                     <i class="bi bi-map-fill"></i>
-                    <span class="nav-label">Compliance Map</span>
+                    <span class="nav-label">Gps/Geofencing Map</span>
                 </button>
 
                 <div class="nav-divider" id="actionsDivider" style="display:none;"></div>
@@ -480,7 +486,7 @@
         const PAGES = {
             summary: { src: 'dashboard.html', title: 'Compliance Dashboard' },
             monitor: { src: 'monitor.html', title: 'Zone Monitor' },
-            map: { src: 'map.html', title: 'Compliance Map' }
+            map: { src: 'map.html', title: 'Gps/Geofencing Map' }
         };
         let currentPage = 'summary';
 
@@ -610,24 +616,24 @@
         }
         if (window.matchMedia('(display-mode: standalone)').matches) localStorage.setItem('pwaInstalled', 'true');
 
-        // Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').then(reg => {
-                    if (reg.waiting) showUpdateBanner(reg.waiting);
-                    reg.addEventListener('updatefound', () => {
-                        const w = reg.installing;
-                        w.addEventListener('statechange', () => {
-                            if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(w);
-                        });
-                    });
-                }).catch(e => console.error('SW failed:', e));
-                let refreshing = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (!refreshing) { refreshing = true; window.location.reload(); }
-                });
-            });
-        }
+        // Service Worker (disabled)
+        // if ('serviceWorker' in navigator) {
+        //     window.addEventListener('load', () => {
+        //         navigator.serviceWorker.register('sw.js').then(reg => {
+        //             if (reg.waiting) showUpdateBanner(reg.waiting);
+        //             reg.addEventListener('updatefound', () => {
+        //                 const w = reg.installing;
+        //                 w.addEventListener('statechange', () => {
+        //                     if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(w);
+        //                 });
+        //             });
+        //         }).catch(e => console.error('SW failed:', e));
+        //         let refreshing = false;
+        //         navigator.serviceWorker.addEventListener('controllerchange', () => {
+        //             if (!refreshing) { refreshing = true; window.location.reload(); }
+        //         });
+        //     });
+        // }
         function showUpdateBanner(worker) {
             window._updateWorker = worker;
             const t = `<div class="toast show align-items-center text-white border-0 mb-2" style="background:var(--accent-primary)">

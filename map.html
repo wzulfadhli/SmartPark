@@ -295,6 +295,70 @@
         .leaflet-popup-tip {
             background: var(--surface-color) !important;
         }
+
+        /* ---- Mobile ---- */
+        @media (max-width: 640px) {
+            .dashboard-title {
+                display: none; /* shell header already shows page name */
+            }
+
+            .kpi-overlay {
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                justify-content: center;
+                gap: 6px;
+            }
+
+            .kpi-overlay .kpi-card {
+                padding: 6px 10px;
+                border-radius: 8px;
+                flex: 1 1 calc(50% - 3px);
+                min-width: 0;
+                max-width: none;
+            }
+
+            .kpi-label {
+                font-size: 0.55rem;
+                margin-bottom: 2px;
+            }
+
+            .kpi-value {
+                font-size: 1.1rem;
+            }
+
+            .layer-toggle {
+                top: auto;
+                bottom: 55px;
+                right: 10px;
+                left: auto;
+                padding: 6px 10px;
+                font-size: 0.7rem;
+                gap: 6px;
+            }
+
+            .hotspot-panel {
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                width: auto;
+                max-width: none;
+            }
+
+            .hotspot-panel.open .hotspot-panel-body {
+                max-height: 140px;
+            }
+
+            .leaflet-popup-content-wrapper {
+                max-width: 220px !important;
+            }
+
+            .leaflet-popup-content {
+                font-size: 0.8rem !important;
+                margin: 10px 12px !important;
+                line-height: 1.4 !important;
+            }
+        }
     </style>
 </head>
 
@@ -302,7 +366,7 @@
     <!-- Apply theme immediately from localStorage (same pattern as other pages) -->
     <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');</script>
 
-    <div class="dashboard-title">GPS/Geofencing Parking Map</div>
+    <!-- <div class="dashboard-title">GPS/Geofencing Parking Map</div> -->
 
     <div class="kpi-overlay">
         <div class="kpi-card">

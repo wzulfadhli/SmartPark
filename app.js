@@ -27,7 +27,7 @@ try {
         appId: process?.env?.FIREBASE_APP_ID || "1:123456789:web:abcdef123456"
     };
 } catch (e) {
-    console.warn('[Config] Using default Firebase config - please update with your credentials');
+    //console.warn('[Config] Using default Firebase config - please update with your credentials');
     FIREBASE_CONFIG = {
         apiKey: "YOUR_API_KEY",
         authDomain: "your-project.firebaseapp.com",
@@ -277,8 +277,8 @@ async function initializeApp() {
     updateStats();
 
     startComplianceCalculation();
-    setupPushNotifications();
-    setupBackgroundSync();
+    // setupPushNotifications(); // disabled
+    // setupBackgroundSync(); // disabled
     updateThemeIcon();
 
     showNotification('GPS Parking System Ready', 'success');
@@ -789,7 +789,7 @@ window.toggleTheme = toggleTheme;
 // Boot
 $(document).ready(() => {
     initializeApp();
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(registration => registration.update());
-    }
+    // if ('serviceWorker' in navigator) {
+    //     navigator.serviceWorker.ready.then(registration => registration.update());
+    // }
 });
