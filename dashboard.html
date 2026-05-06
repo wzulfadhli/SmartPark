@@ -289,7 +289,7 @@
                         <i class="bi bi-receipt"></i>
                     </div>
                 </div>
-                <div class="kpi-sub">7-day total</div>
+                <div class="kpi-sub">Total Daily Sessions</div>
             </div>
         </div>
     </div>
@@ -672,6 +672,7 @@
             document.getElementById('kpiTotal').textContent = totalLots;
             document.getElementById('kpiZonesCount').textContent = zones.length + ' zones';
             document.getElementById('kpiOccupied').textContent = activeSessionsCount;
+            document.getElementById('kpiSessions').textContent = sessions.length;
             document.getElementById('kpiOccupancyPct').textContent = totalLots ? Math.round((activeSessionsCount / totalLots) * 100) + '%' : '0%';
             document.getElementById('kpiCompliance').textContent = avgCompliance.toFixed(1) + '%';
             document.getElementById('kpiComplianceStatus').textContent = complianceStatus;
