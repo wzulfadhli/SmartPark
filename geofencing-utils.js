@@ -28,13 +28,60 @@ function calculateDistance(coord1, coord2) {
 }
 
 /**
- * Check if a coordinate is within a geofenced zone
+ * Check if a coordinate is inside a rectangle defined by a road line + half-width buffer.
+ * Uses a local 2-D projection (metres) to avoid dealing with spherical geometry.
+ * @param {Object} coords - {lat, lng}
+ * @param {Array}  line   - [{lat, lng}, {lat, lng}] road endpoints
+ * @param {number} halfWidth - perpendicular buffer in metres (default 20)
+ * @returns {boolean}
+ */
+function isWithinLineBoundingRect(coords, line, halfWidth) {
+    if (!coords || !line || line.length < 2) return false;
+    halfWidth = halfWidth || 20;
+
+    // Check each consecutive segment — supports multi-point lines
+    for (let i = 0; i < line.length - 1; i++) {
+        const p1 = line[i], p2 = line[i + 1];
+        const cosLat = Math.cos(((p1.lat + p2.lat) / 2) * Math.PI / 180);
+
+        // Inline projection relative to p1 — avoids closure-over-loop-variable bug
+        const bx = (p2.lng - p1.lng) * 111320 * cosLat;
+        const by = (p2.lat - p1.lat) * 111320;
+        const qx = (coords.lng - p1.lng) * 111320 * cosLat;
+        const qy = (coords.lat - p1.lat) * 111320;
+
+        const roadLen = Math.sqrt(bx * bx + by * by);
+        if (roadLen === 0) continue;
+        const ux = bx / roadLen, uy = by / roadLen;
+
+        const along = qx * ux + qy * uy;
+        const perp  = Math.abs(-qx * uy + qy * ux);
+
+        if (along >= 0 && along <= roadLen && perp <= halfWidth) return true;
+    }
+
+    return false;
+}
+
+/**
+ * Check if a coordinate is within a geofenced zone.
+ * For line-type zones (zone.line defined) a rectangle buffer is used;
+ * for circle-type zones the Haversine radius check is used.
  * @param {Object} coords - Coordinate to check {lat, lng}
- * @param {Object} zone - Zone definition {center: {lat, lng}, radius: number}
+ * @param {Object} zone   - Zone definition
  * @returns {boolean} True if coordinate is within the zone
  */
 function isWithinGeofence(coords, zone) {
-    if (!coords || !zone || !zone.center || !zone.radius) {
+    if (!coords || !zone) {
+        console.warn('[Geofencing] Invalid coordinates or zone provided');
+        return false;
+    }
+
+    if (zone.line && zone.line.length >= 2) {
+        return isWithinLineBoundingRect(coords, zone.line, zone.bufferMeters || 20);
+    }
+
+    if (!zone.center || !zone.radius) {
         console.warn('[Geofencing] Invalid coordinates or zone provided');
         return false;
     }

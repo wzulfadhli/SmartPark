@@ -351,6 +351,38 @@ function loadSampleZones() {
             radius: 180,
             totalLots: 75,
             createdAt: new Date().toISOString()
+        },
+        {
+            id: 'zone_ss17_1e',
+            name: 'Jalan SS17/1E',
+            center: { lat: 3.07597, lng: 101.58010 },
+            radius: 200,
+            bufferMeters: 35,
+            totalLots: 40,
+            line: [
+                { lat: 3.077359121599855,  lng: 101.58049118471104 },
+                { lat: 3.0770779840562454, lng: 101.58043347219171 },
+                { lat: 3.077049169401164,  lng: 101.58042957269771 },
+                { lat: 3.076699191195715,  lng: 101.58032093230793 },
+                { lat: 3.0764660411565927, lng: 101.5802499517277  },
+                { lat: 3.0761054317447503, lng: 101.58015388301482 },
+                { lat: 3.075641876459102,  lng: 101.58001257976917 },
+                { lat: 3.0745650069976165, lng: 101.57970801776668 }
+            ],
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'zone_ss17_1b',
+            name: 'Jalan SS17/1B',
+            center: { lat: 3.07856, lng: 101.58066 },
+            radius: 70,
+            bufferMeters: 35,
+            totalLots: 30,
+            line: [
+                { lat: 3.0784821661062836, lng: 101.57993950376465 },
+                { lat: 3.0786421942890456, lng: 101.58137902736576 }
+            ],
+            createdAt: new Date().toISOString()
         }
     ];
     console.log('[Demo] Loaded sample zones');
@@ -518,9 +550,6 @@ async function cancelPaymentSession(sessionId) {
 function calculateAndStoreCompliance() {
     const currentTime = Date.now();
 
-    console.log('=== COMPLIANCE CALCULATION DEBUG ===');
-    console.log('Current Time:', new Date(currentTime).toISOString());
-
     // Bucket sessions into the zone that GPS-contains them, ignoring stored zoneId.
     // Only sessions that are active AND currently within their time window are counted.
     const activeByZone = {};
@@ -539,13 +568,6 @@ function calculateAndStoreCompliance() {
         const complianceRate = calculateComplianceRate(activeCount, zone.totalLots);
         const statusColor = getComplianceStatusColor(complianceRate, COMPLIANCE_THRESHOLDS);
 
-        // Debug output
-        console.log(`\nZone: ${zone.name} (${zone.id})`);
-        console.log(`  Total Lots: ${zone.totalLots}`);
-        console.log(`  Active Sessions: ${activeCount}`);
-        console.log(`  Compliance Rate: ${complianceRate.toFixed(1)}%`);
-        console.log(`  Status: ${statusColor.toUpperCase()}`);
-
         const snapshot = {
             zoneId: zone.id,
             zoneName: zone.name,
@@ -561,7 +583,6 @@ function calculateAndStoreCompliance() {
         syncComplianceSnapshotToFirebase(snapshot);
     });
 
-    console.log('=== END COMPLIANCE CALCULATION ===\n');
 }
 
 // calculateComplianceRate, getComplianceStatusColor → compliance-utils.js
@@ -613,14 +634,18 @@ async function incrementDailyFees(fee) {
 // ============================================================
 
 function updateStats() {
+    const now = Date.now();
     const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
-    const activeSessionsCount = paymentSessions.filter(s => s.status === 'active').length;
+    const activeSessionsCount = paymentSessions.filter(s =>
+        s.status === 'active' && now >= s.startTime && now <= s.endTime
+    ).length;
 
-    // Calculate overall compliance based on GPS location within geofences
+    // Calculate overall compliance based on GPS location within geofences (time-window aware)
     let totalCompliance = 0;
     zones.forEach(zone => {
         const activeInZone = paymentSessions.filter(s => {
             if (s.status !== 'active') return false;
+            if (now < s.startTime || now > s.endTime) return false;
             if (!s.location || s.location.lat == null) return false;
             return isWithinGeofence(s.location, zone);
         }).length;
@@ -789,7 +814,4 @@ window.toggleTheme = toggleTheme;
 // Boot
 $(document).ready(() => {
     initializeApp();
-    // if ('serviceWorker' in navigator) {
-    //     navigator.serviceWorker.ready.then(registration => registration.update());
-    // }
 });

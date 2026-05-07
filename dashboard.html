@@ -366,6 +366,7 @@
             <select id="filterHistoryStatus">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
+                <option value="upcoming">Upcoming</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
             </select>
@@ -400,7 +401,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="geofencing-utils.js"></script>
+    <script src="geofencing-utils.js?v=2"></script>
     <script src="compliance-utils.js"></script>
     <script src="dummy-data.js"></script>
     <script src="app.js"></script>
@@ -613,6 +614,8 @@
                 const timeOut = new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const badge = s.status === 'active'
                     ? '<span class="badge bg-primary">Active</span>'
+                    : s.status === 'upcoming'
+                    ? '<span class="badge bg-secondary">Upcoming</span>'
                     : s.status === 'completed'
                     ? '<span class="badge bg-success">Completed</span>'
                     : '<span class="badge bg-warning">Cancelled</span>';

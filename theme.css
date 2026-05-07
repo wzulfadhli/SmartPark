@@ -161,22 +161,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 .offline-indicator.show { display: flex; }
 
-/* ---- Install Prompt ---- */
-.install-prompt {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: var(--surface-color);
-    border: 1px solid var(--accent-primary);
-    border-radius: 100px;
-    padding: 12px 24px;
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
-    z-index: 10000;
-    display: none;
-    align-items: center;
-    gap: 15px;
-}
 
 /* ---- Toast Notifications ---- */
 .notification-toast {

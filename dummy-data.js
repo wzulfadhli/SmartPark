@@ -57,6 +57,38 @@ const DUMMY_ZONES = [
         radius: 180,
         totalLots: 75,
         createdAt: new Date().toISOString()
+    },
+    {
+        id: 'zone_ss17_1e',
+        name: 'Jalan SS17/1E',
+        center: { lat: 3.07597, lng: 101.58010 },
+        radius: 200,
+        bufferMeters: 35,
+        totalLots: 40,
+        line: [
+            { lat: 3.077359121599855,  lng: 101.58049118471104 },
+            { lat: 3.0770779840562454, lng: 101.58043347219171 },
+            { lat: 3.077049169401164,  lng: 101.58042957269771 },
+            { lat: 3.076699191195715,  lng: 101.58032093230793 },
+            { lat: 3.0764660411565927, lng: 101.5802499517277  },
+            { lat: 3.0761054317447503, lng: 101.58015388301482 },
+            { lat: 3.075641876459102,  lng: 101.58001257976917 },
+            { lat: 3.0745650069976165, lng: 101.57970801776668 }
+        ],
+        createdAt: new Date().toISOString()
+    },
+    {
+        id: 'zone_ss17_1b',
+        name: 'Jalan SS17/1B',
+        center: { lat: 3.07856, lng: 101.58066 },
+        radius: 70,
+        bufferMeters: 35,
+        totalLots: 30,
+        line: [
+            { lat: 3.0784821661062836, lng: 101.57993950376465 },
+            { lat: 3.0786421942890456, lng: 101.58137902736576 }
+        ],
+        createdAt: new Date().toISOString()
     }
 ];
 
@@ -77,9 +109,26 @@ function createSession(zoneId, vehicleId, startOffsetMinutes, durationMinutes) {
     const endTime = startTime + (durationMinutes * 60 * 1000);
     const zone = DUMMY_ZONES.find(z => z.id === zoneId);
 
-    // Generate a realistic GPS location within the zone's radius
+    // Generate a realistic GPS location within the zone's geofence
     let location;
-    if (zone && zone.center) {
+    if (zone && zone.line && zone.line.length >= 2) {
+        // Line-type zone: pick a random segment, then a random point along it,
+        // offset by up to bufferMeters perpendicular (so it stays inside the rectangle)
+        const buf = (zone.bufferMeters || 20) * 0.8;
+        const segIdx = Math.floor(seededRandom() * (zone.line.length - 1));
+        const p1 = zone.line[segIdx], p2 = zone.line[segIdx + 1];
+        const t = seededRandom(); // position along segment [0,1]
+        const baseLat = p1.lat + t * (p2.lat - p1.lat);
+        const baseLng = p1.lng + t * (p2.lng - p1.lng);
+        // Perpendicular offset direction
+        const dLat = p2.lat - p1.lat, dLng = p2.lng - p1.lng;
+        const len = Math.sqrt(dLat * dLat + dLng * dLng);
+        const cosLat = Math.cos(baseLat * Math.PI / 180);
+        const perpLat = (-dLng / len) * (buf / 111320);
+        const perpLng = (dLat / len) * (buf / (111320 * cosLat));
+        const side = (seededRandom() < 0.5 ? 1 : -1) * seededRandom();
+        location = { lat: baseLat + perpLat * side, lng: baseLng + perpLng * side };
+    } else if (zone && zone.center) {
         const radius = zone.radius || 100;
         const angle = seededRandom() * 2 * Math.PI;
         const dist = Math.sqrt(seededRandom()) * radius * 0.8; // keep within 80% of radius
@@ -292,6 +341,39 @@ DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss16_1', 'VEH_175', -14, 35));
 DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss16_1', 'VEH_176', -49, 100));
 DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss16_1', 'VEH_177', -26, 55));
 
+// Jalan SS17/1E active sessions
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_201', -12, 60));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_202', -28, 90));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_203', -8,  45));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_204', -35, 120));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_205', -20, 60));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_206', -50, 90));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_207', -38, 80));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_208', -22, 50));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_209', -30, 65));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_210', -14, 35));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_211', -49, 100));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_212', -26, 55));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_213', -13, 35));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_214', -46, 90));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_215', -21, 50));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_216', -34, 70));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_217', -27, 55));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_218', -17, 40));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_219', -39, 80));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_220', -9, 30));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_221', -32, 65));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_222', -24, 50));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_223', -15, 35));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1e', 'VEH_224', -47, 95));
+
+// Jalan SS17/1B active sessions
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1b', 'VEH_191', -10, 60));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1b', 'VEH_192', -25, 90));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1b', 'VEH_193', -5, 45));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1b', 'VEH_194', -40, 120));
+DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1b', 'VEH_195', -18, 60));
+
 // ============================================================
 // OUTSIDE-ZONE SESSIONS (paid, but GPS location is NOT inside any geofenced zone)
 // ============================================================
@@ -341,6 +423,7 @@ function offsetFromZone(zone, metersBeyondRadius, bearingDeg) {
     DUMMY_PAYMENT_SESSIONS.push(createOutsideSession(o.vehicle, lat, lng, o.startOffset, o.duration));
 });
 
+
 // ============================================================
 // EXPIRED SESSIONS (end time is in the past)
 // ============================================================
@@ -359,7 +442,7 @@ for (let i = 178; i <= 185; i++) {
 
 for (let i = 186; i <= 190; i++) {
     const session = createSession('zone_ss15_8', `VEH_${i}`, 30, 60);
-    session.status = 'active';
+    session.status = 'upcoming';
     DUMMY_PAYMENT_SESSIONS.push(session);
 }
 

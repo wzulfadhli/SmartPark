@@ -20,6 +20,10 @@
             overflow: hidden;
         }
 
+        #map.theme-dark .leaflet-tile-pane {
+            filter: brightness(1.4) contrast(0.85) saturate(1.1);
+        }
+
         #map {
             height: 100%;
             width: 100%;
@@ -99,7 +103,7 @@
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 0;
-            z-index: 1000;
+            z-index: 1001;
             backdrop-filter: blur(10px);
             box-shadow: var(--card-shadow);
             overflow: hidden; /* clip the collapsing body */
@@ -154,7 +158,7 @@
             padding: 0 15px;
         }
         .hotspot-panel.open .hotspot-panel-body {
-            max-height: calc(100vh - 200px);
+            max-height: calc(100vh - 300px);
             overflow-y: auto;
             padding: 12px 15px;
         }
@@ -224,6 +228,11 @@
             color: var(--accent-success);
         }
         .layer-toggle i { font-size: 0.95rem; }
+
+        #bboxToggle {
+            top: 148px;
+            left: 20px;
+        }
 
         /* Payer marker pulse (in-zone) */
         .payer-icon {
@@ -327,14 +336,15 @@
                 font-size: 1.1rem;
             }
 
-            .layer-toggle {
-                top: auto;
-                bottom: 55px;
-                right: 10px;
-                left: auto;
+            .layer-toggle { 
                 padding: 6px 10px;
+                top: 115px;
                 font-size: 0.7rem;
                 gap: 6px;
+            }
+
+            #bboxToggle {
+                top: 155px;
             }
 
             .hotspot-panel {
@@ -402,12 +412,17 @@
         <span id="payerToggleLabel">Show Payers</span>
     </button>
 
+    <button class="layer-toggle" id="bboxToggle" onclick="toggleBboxLayer()" title="Toggle bounding boxes">
+        <i class="bi bi-bounding-box"></i>
+        <span id="bboxToggleLabel">Show Bounds</span>
+    </button>
+
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="geofencing-utils.js"></script>
+    <script src="geofencing-utils.js?v=2"></script>
     <script src="compliance-utils.js"></script>
     <script src="dummy-data.js"></script>
     <script src="app.js"></script>
@@ -417,9 +432,10 @@
         // Payment sessions will be loaded from Firebase (window.PAYMENT_SESSIONS)
 
         // ---- Tile URLs ----
-        const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
         const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-        const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright"></a> <a href="https://carto.com/attributions"></a>';
+        const TILE_ATTR_DARK  = '<a href="https://www.openstreetmap.org/copyright"/a><a href="https://carto.com/attributions"/a>';
+        const TILE_ATTR_LIGHT = '<a href="https://www.openstreetmap.org/copyright"/a><a href="https://carto.com/attributions"/a>';
 
         // ---- Map init ----
         const map = L.map('map', { zoomControl: true }).setView([3.07, 101.587], 15);
@@ -427,13 +443,16 @@
         let tileLayer = null;
 
         function applyTile(theme) {
-            const url = theme === 'dark' ? TILE_DARK : TILE_LIGHT;
+            const isDark = theme === 'dark';
+            const url  = isDark ? TILE_DARK  : TILE_LIGHT;
+            const attr = isDark ? TILE_ATTR_DARK : TILE_ATTR_LIGHT;
             if (tileLayer) map.removeLayer(tileLayer);
             tileLayer = L.tileLayer(url, {
-                attribution: TILE_ATTR,
+                attribution: attr,
                 subdomains: 'abcd',
                 maxZoom: 20
             }).addTo(map);
+            document.getElementById('map').classList.toggle('theme-dark', isDark);
         }
 
         // Apply tile for current theme on load
@@ -454,6 +473,10 @@
         // ---- Payer markers (individual active sessions) ----
         let payerLayer = L.layerGroup();
         let payersVisible = false;
+
+        // ---- Bounding box layer (rectangles / geofence circles) ----
+        let bboxLayer = L.layerGroup();
+        let bboxVisible = false;
 
         // Deterministic scatter so each session keeps the same offset across re-renders
         function scatterOffset(seed, radiusMeters) {
@@ -537,6 +560,21 @@
             });
         }
 
+        function toggleBboxLayer() {
+            bboxVisible = !bboxVisible;
+            const btn = document.getElementById('bboxToggle');
+            const label = document.getElementById('bboxToggleLabel');
+            if (bboxVisible) {
+                bboxLayer.addTo(map);
+                btn.classList.add('active');
+                label.textContent = 'Hide Bounds';
+            } else {
+                map.removeLayer(bboxLayer);
+                btn.classList.remove('active');
+                label.textContent = 'Show Bounds';
+            }
+        }
+
         function togglePayerLayer() {
             payersVisible = !payersVisible;
             const btn = document.getElementById('payerToggle');
@@ -553,6 +591,17 @@
             }
         }
 
+        const isTouchDevice = () => window.matchMedia('(hover: none)').matches;
+
+        function bindHoverPopup(layer, html) {
+            layer.bindPopup(html, { closeButton: false, autoPan: false });
+            if (!isTouchDevice()) {
+                layer.on('mouseover', function () { this.openPopup(); });
+                layer.on('mouseout',  function () { this.closePopup(); });
+            }
+            return layer;
+        }
+
         function renderZones() {
             const zones = window.ZONES || [];
             const sessions = window.PAYMENT_SESSIONS || [];
@@ -561,6 +610,7 @@
             // Clear existing markers
             zoneMarkers.forEach(marker => map.removeLayer(marker));
             zoneMarkers = [];
+            bboxLayer.clearLayers();
             list.innerHTML = '';
 
             totalLots = 0;
@@ -589,53 +639,85 @@
                 totalSessions += activeInZone;
                 totalCompliance += complianceRate;
 
-                // Circle marker for zone center
-                const marker = L.circleMarker([zone.center.lat, zone.center.lng], {
-                    radius: 14,
-                    fillColor: style.hex,
-                    color: '#fff',
-                    weight: 2,
-                    opacity: 1,
-                    fillOpacity: 0.75
-                }).addTo(map).bindPopup(
-                    `<b>${zone.name}</b><br>
-                     Total Lots: ${zone.totalLots}<br>
-                     Active Sessions: ${activeInZone}<br>
-                     Compliance: ${complianceRate.toFixed(1)}%<br>
-                     Status: ${style.text}`
-                );
+                const popupHtml =
+                    `<b>${zone.name}</b><br>` +
+                    `Total Lots: ${zone.totalLots}<br>` +
+                    `Active Sessions: ${activeInZone}<br>` +
+                    `Compliance: ${complianceRate.toFixed(1)}%<br>` +
+                    `Status: ${style.text}`;
 
-                // Add geofence circle
-                const geofence = L.circle([zone.center.lat, zone.center.lng], {
-                    radius: zone.radius,
-                    fillColor: style.hex,
-                    color: style.hex,
-                    weight: 2,
-                    opacity: 0.3,
-                    fillOpacity: 0.1
-                }).addTo(map).bindPopup(
-                    `<b>${zone.name}</b><br>
-                     Total Lots: ${zone.totalLots}<br>
-                     Active Sessions: ${activeInZone}<br>
-                     Compliance: ${complianceRate.toFixed(1)}%<br>
-                     Status: ${style.text}`
-                );
+                if (zone.line && zone.line.length >= 2) {
+                    // Line-type zone: polyline along all points
+                    const polyline = L.polyline(
+                        zone.line.map(p => [p.lat, p.lng]),
+                        { color: style.hex, weight: 5, opacity: 0.85 }
+                    ).addTo(map);
+                    bindHoverPopup(polyline, popupHtml);
+                    zoneMarkers.push(polyline);
 
-                zoneMarkers.push(marker, geofence);
+                    // Per-segment rectangle buffer — goes into togglable bboxLayer
+                    const buf = zone.bufferMeters || 20;
+                    for (let i = 0; i < zone.line.length - 1; i++) {
+                        const p1 = zone.line[i], p2 = zone.line[i + 1];
+                        const dLat = p2.lat - p1.lat;
+                        const dLng = p2.lng - p1.lng;
+                        const len = Math.sqrt(dLat * dLat + dLng * dLng);
+                        const cosLat = Math.cos(((p1.lat + p2.lat) / 2) * Math.PI / 180);
+                        const perpLat = (-dLng / len) * (buf / 111320);
+                        const perpLng = (dLat / len) * (buf / (111320 * cosLat));
+                        const rect = L.polygon([
+                            [p1.lat + perpLat, p1.lng + perpLng],
+                            [p2.lat + perpLat, p2.lng + perpLng],
+                            [p2.lat - perpLat, p2.lng - perpLng],
+                            [p1.lat - perpLat, p1.lng - perpLng]
+                        ], {
+                            color: style.hex,
+                            weight: 1,
+                            opacity: 0.4,
+                            fillColor: style.hex,
+                            fillOpacity: 0.12
+                        });
+                        bindHoverPopup(rect, popupHtml);
+                        bboxLayer.addLayer(rect);
+                    }
+                } else {
+                    // Circle-type zone: circle marker + geofence circle
+                    const marker = L.circleMarker([zone.center.lat, zone.center.lng], {
+                        radius: 14,
+                        fillColor: style.hex,
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.75
+                    }).addTo(map);
+                    bindHoverPopup(marker, popupHtml);
+
+                    const geofence = L.circle([zone.center.lat, zone.center.lng], {
+                        radius: zone.radius,
+                        fillColor: style.hex,
+                        color: style.hex,
+                        weight: 2,
+                        opacity: 0.3,
+                        fillOpacity: 0.1
+                    });
+                    bindHoverPopup(geofence, popupHtml);
+                    bboxLayer.addLayer(geofence);
+
+                    zoneMarkers.push(marker);
+                }
 
                 // Zone panel row
                 const row = document.createElement('div');
                 row.className = 'hotspot-row';
-                row.innerHTML = `
-                    <div class="street-name">${zone.name}</div>
-                    <div class="progress-track">
-                        <div class="progress-fill" style="width:${complianceRate}%; background-color:${style.hex};"></div>
-                    </div>
-                    <div class="stat-line">
-                        <span>${activeInZone} / ${zone.totalLots} Active</span>
-                        <span style="color:${style.hex}; font-weight:600;">${complianceRate.toFixed(1)}%</span>
-                    </div>
-                `;
+                row.innerHTML =
+                    `<div class="street-name">${zone.name}</div>` +
+                    `<div class="progress-track">` +
+                    `<div class="progress-fill" style="width:${complianceRate}%; background-color:${style.hex};"></div>` +
+                    `</div>` +
+                    `<div class="stat-line">` +
+                    `<span>${activeInZone} / ${zone.totalLots} Active</span>` +
+                    `<span style="color:${style.hex}; font-weight:600;">${complianceRate.toFixed(1)}%</span>` +
+                    `</div>`;
                 list.appendChild(row);
             });
 
