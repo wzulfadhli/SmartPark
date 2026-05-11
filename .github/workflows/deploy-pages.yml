@@ -1,0 +1,62 @@
+# .github/workflows/deploy-pages.yml
+# Deploys the SmartPark dashboard to GitHub Pages
+#
+# This workflow:
+#   1. Copies pages/ and src/ into a combined build folder
+#   2. Fixes relative paths (../src/ → ./src/)
+#   3. Uploads as a GitHub Pages artifact
+#   4. Deploys to https://wzulfadhli.github.io/SmartPark/
+#
+# Prerequisites:
+#   - Repo Settings → Pages → Source: GitHub Actions
+
+name: Deploy SmartPark to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow only one concurrent deployment
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build site
+        run: |
+          # Create build directory with pages/ content at root
+          mkdir -p _site
+          cp -r pages/* _site/
+          
+          # Copy src/ into _site/src/ so it's accessible from the deployed root
+          cp -r src _site/src
+          
+          # Fix paths: ../src/ → ./src/
+          # (pages/index.html was at pages/index.html, now at root. src was at src/, now at _site/src/)
+          find _site -name '*.html' -exec sed -i 's|\.\./src/|./src/|g' {} \;
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
