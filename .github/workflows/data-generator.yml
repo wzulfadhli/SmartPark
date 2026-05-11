@@ -41,12 +41,11 @@ jobs:
           mkdir -p .secrets
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > .secrets/serviceAccountKey.json
 
-      - name: Run data generator (4 min burst)
+      - name: Run data generator (single shot)
         env:
           FIREBASE_PROJECT_ID: gpark-9eed8
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.secrets/serviceAccountKey.json
-        run: |
-          timeout 240 node scripts/data-generator.js || true
+        run: node scripts/data-generator.js
 
       - name: Cleanup credentials
         if: always()

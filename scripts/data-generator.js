@@ -391,28 +391,27 @@ async function populateMissingSessions() {
 
 // ---- Main loop ----
 async function main() {
-    console.log('=== SmartPark Continuous Data Generator ===');
+    const startTime = Date.now();
+    console.log('=== SmartPark Data Generator (Single Shot) ===');
     console.log('Project:', process.env.FIREBASE_PROJECT_ID || 'your-project-id');
-    console.log('New sessions every:', GENERATE_INTERVAL_MS / 1000, 'seconds');
-    console.log('Expiry check every:', EXPIRE_CHECK_MS / 1000, 'seconds');
-    console.log('Compliance snapshot every:', COMPLIANCE_SNAPSHOT_MS / 1000, 'seconds');
-    console.log('Press Ctrl+C to stop\n');
+    console.log('Run started:', new Date().toISOString(), '\n');
 
     await loadZones();
 
-    // Populate missing sessions first (creates bulk if DB is empty/low)
+    // 1. Populate missing sessions to reach zone targets
     await populateMissingSessions();
 
-    // Mark any expired sessions before counting
+    // 2. Mark expired sessions as completed
     await expireTick();
 
-    // Write initial snapshot
+    // 3. Generate one new batch of sessions
+    await tick();
+
+    // 4. Write compliance snapshot
     await snapshotTick();
 
-    // Start timers
-    setInterval(tick, GENERATE_INTERVAL_MS);
-    setInterval(expireTick, EXPIRE_CHECK_MS);
-    setInterval(snapshotTick, COMPLIANCE_SNAPSHOT_MS);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`\n✅ Single shot complete (${elapsed}s). Exiting...`);
 }
 
 main().catch(err => {
