@@ -32,7 +32,9 @@ const DUMMY_ZONES = [
         center: { lat: 3.0765, lng: 101.5890 },
         radius: 150, // meters
         totalLots: 50,
-        createdAt: new Date().toISOString()
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     },
     {
         id: 'zone_ss15_8',
@@ -40,7 +42,9 @@ const DUMMY_ZONES = [
         center: { lat: 3.0750, lng: 101.5895 },
         radius: 120,
         totalLots: 40,
-        createdAt: new Date().toISOString()
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     },
     {
         id: 'zone_usj10_taipan',
@@ -48,7 +52,9 @@ const DUMMY_ZONES = [
         center: { lat: 3.0485, lng: 101.5850 },
         radius: 200,
         totalLots: 120,
-        createdAt: new Date().toISOString()
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     },
     {
         id: 'zone_ss16_1',
@@ -56,7 +62,9 @@ const DUMMY_ZONES = [
         center: { lat: 3.0820, lng: 101.5865 },
         radius: 180,
         totalLots: 75,
-        createdAt: new Date().toISOString()
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     },
     {
         id: 'zone_ss17_1e',
@@ -65,6 +73,7 @@ const DUMMY_ZONES = [
         radius: 200,
         bufferMeters: 35,
         totalLots: 40,
+        isActive: true,
         line: [
             { lat: 3.077359121599855,  lng: 101.58049118471104 },
             { lat: 3.0770779840562454, lng: 101.58043347219171 },
@@ -75,7 +84,8 @@ const DUMMY_ZONES = [
             { lat: 3.075641876459102,  lng: 101.58001257976917 },
             { lat: 3.0745650069976165, lng: 101.57970801776668 }
         ],
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     },
     {
         id: 'zone_ss17_1b',
@@ -84,11 +94,13 @@ const DUMMY_ZONES = [
         radius: 70,
         bufferMeters: 35,
         totalLots: 30,
+        isActive: true,
         line: [
             { lat: 3.0784821661062836, lng: 101.57993950376465 },
             { lat: 3.0786421942890456, lng: 101.58137902736576 }
         ],
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     }
 ];
 
@@ -103,14 +115,14 @@ const DUMMY_ZONES = [
 
 const DUMMY_PAYMENT_SESSIONS = [];
 
-// Helper to create a session
+// Helper to create a session (snake_case to match Firestore schema)
 function createSession(zoneId, vehicleId, startOffsetMinutes, durationMinutes) {
     const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
     const endTime = startTime + (durationMinutes * 60 * 1000);
     const zone = DUMMY_ZONES.find(z => z.id === zoneId);
 
     // Generate a realistic GPS location within the zone's geofence
-    let location;
+    let lat, lng;
     if (zone && zone.line && zone.line.length >= 2) {
         // Line-type zone: pick a random segment, then a random point along it,
         // offset by up to bufferMeters perpendicular (so it stays inside the rectangle)
@@ -127,28 +139,45 @@ function createSession(zoneId, vehicleId, startOffsetMinutes, durationMinutes) {
         const perpLat = (-dLng / len) * (buf / 111320);
         const perpLng = (dLat / len) * (buf / (111320 * cosLat));
         const side = (seededRandom() < 0.5 ? 1 : -1) * seededRandom();
-        location = { lat: baseLat + perpLat * side, lng: baseLng + perpLng * side };
+        lat = baseLat + perpLat * side;
+        lng = baseLng + perpLng * side;
     } else if (zone && zone.center) {
         const radius = zone.radius || 100;
         const angle = seededRandom() * 2 * Math.PI;
         const dist = Math.sqrt(seededRandom()) * radius * 0.8; // keep within 80% of radius
         const dLat = (dist * Math.cos(angle)) / 111320;
         const dLng = (dist * Math.sin(angle)) / (111320 * Math.cos(zone.center.lat * Math.PI / 180));
-        location = { lat: zone.center.lat + dLat, lng: zone.center.lng + dLng };
+        lat = zone.center.lat + dLat;
+        lng = zone.center.lng + dLng;
     } else {
-        location = { lat: 0, lng: 0 };
+        lat = 0;
+        lng = 0;
+    }
+
+    // Determine status based on current time relative to session window
+    const now = Date.now();
+    let status;
+    if (now < startTime) {
+        status = 'upcoming';
+    } else if (now > endTime) {
+        status = 'completed';
+    } else {
+        status = 'active';
     }
 
     return {
-        sessionId: `session_${seededRandom().toString(36).substr(2, 9)}`,
-        vehicleId: vehicleId,
-        location: location,
-        startTime: startTime,
-        endTime: endTime,
-        durationMinutes: durationMinutes,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        id: `session_${seededRandom().toString(36).substr(2, 9)}`,
+        zone_id: zoneId,
+        vehicle_id: vehicleId,
+        lat: lat,
+        lng: lng,
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: durationMinutes,
+        status: status,
+        is_compliant: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
     };
 }
 
@@ -386,16 +415,18 @@ function createOutsideSession(vehicleId, lat, lng, startOffsetMinutes, durationM
     const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
     const endTime = startTime + (durationMinutes * 60 * 1000);
     return {
-        sessionId: `session_${seededRandom().toString(36).substr(2, 9)}`,
-        vehicleId: vehicleId,
-        location: { lat, lng },
-        startTime: startTime,
-        endTime: endTime,
-        durationMinutes: durationMinutes,
+        id: `session_${seededRandom().toString(36).substr(2, 9)}`,
+        vehicle_id: vehicleId,
+        lat: lat,
+        lng: lng,
+        zone_id: null,
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: durationMinutes,
         status: 'active',
-        isOutsideZone: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        is_compliant: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
     };
 }
 
@@ -447,11 +478,45 @@ for (let i = 186; i <= 190; i++) {
 }
 
 // ============================================================
-// EXPORT
+// MANUAL TEST SESSIONS
+// ============================================================
+// Use createManualSession() to inject a session at exact GPS
+// coordinates. Useful for testing geofence edge cases.
+//
+// createManualSession(vehicle_id, lat, lng, startOffsetMinutes, durationMinutes)
+//   vehicle_id         – any string, e.g. 'MY_CAR'
+//   lat / lng          – exact GPS coordinates
+//   startOffsetMinutes – minutes relative to now (negative = already started)
+//   durationMinutes    – how long the session lasts
+//
+// Examples:
+//   DUMMY_PAYMENT_SESSIONS.push(createManualSession('MY_CAR', 3.07650, 101.58020, -10, 60));
+//   DUMMY_PAYMENT_SESSIONS.push(createManualSession('TEST_OUTSIDE', 3.07200, 101.57500, -5, 30));
 // ============================================================
 
-// Expose fully-populated arrays to window for iframe access.
-// These assignments MUST be after all DUMMY_* arrays are built.
+function createManualSession(vehicleId, lat, lng, startOffsetMinutes, durationMinutes) {
+    const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
+    const endTime   = startTime + (durationMinutes * 60 * 1000);
+    return {
+        id:              `manual_${vehicleId}_${Date.now()}`,
+        vehicle_id:      vehicleId,
+        lat:             lat,
+        lng:             lng,
+        zone_id:         null,
+        start_time:      startTime,
+        end_time:        endTime,
+        duration_minutes: durationMinutes,
+        status:          'active',
+        is_compliant:    false,
+        created_at:      new Date().toISOString(),
+        updated_at:      new Date().toISOString()
+    };
+}
+
+// ---- Add your custom sessions below this line ----
+// DUMMY_PAYMENT_SESSIONS.push(createManualSession('MY_CAR', 3.07650, 101.58020, -10, 60));
+
+
 if (typeof window !== 'undefined') {
     window.DUMMY_ZONES = DUMMY_ZONES;
     window.DUMMY_PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;

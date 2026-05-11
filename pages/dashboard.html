@@ -8,7 +8,7 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="../src/theme.css">
 
     <style>
         body {
@@ -401,10 +401,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="geofencing-utils.js?v=2"></script>
-    <script src="compliance-utils.js"></script>
-    <script src="dummy-data.js"></script>
-    <script src="app.js"></script>
+    <script src="../src/geofencing-utils.js?v=2"></script>
+    <script src="../src/compliance-utils.js"></script>
+    <script src="../src/dummy-data.js"></script>
+    <script src="../src/app.js"></script>
 
     <script>
         // ============================================================
@@ -417,12 +417,12 @@
         // ---- Shared helpers (consistent with monitor.html and map.html) ----
         // True if a session is paid AND currently within its time window.
         function isSessionActiveNow(s, now) {
-            return s.status === 'active' && now >= s.startTime && now <= s.endTime;
+            return s.status === 'active' && now >= s.start_time && now <= s.end_time;
         }
         // Returns the zone that GPS-contains the session.
         function resolveSessionZone(session, zones) {
-            if (session.location && session.location.lat != null) {
-                return findZoneForCoords(session.location, zones);
+            if (session.lat != null && session.lng != null) {
+                return findZoneForCoords({ lat: session.lat, lng: session.lng }, zones);
             }
             return null;
         }
@@ -593,7 +593,7 @@
                 } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
                 if (statusVal && s.status !== statusVal) return false;
                 if (searchVal) {
-                    const hay = ((s.sessionId || '') + ' ' + (s.vehicleId || '')).toLowerCase();
+                    const hay = ((s.id || '') + ' ' + (s.vehicle_id || '')).toLowerCase();
                     if (!hay.includes(searchVal)) return false;
                 }
                 return true;
@@ -608,10 +608,10 @@
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No payment sessions yet</td></tr>';
                 return;
             }
-            const sorted = [...filtered].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const sorted = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             tbody.innerHTML = sorted.map(s => {
-                const timeIn = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const timeOut = new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const timeIn = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const timeOut = new Date(s.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const badge = s.status === 'active'
                     ? '<span class="badge bg-primary">Active</span>'
                     : s.status === 'upcoming'
@@ -620,11 +620,11 @@
                     ? '<span class="badge bg-success">Completed</span>'
                     : '<span class="badge bg-warning">Cancelled</span>';
                 return `<tr class="session-row">
-                    <td class="fw-bold small">${s.sessionId.substr(0, 12)}...</td>
+                    <td class="fw-bold small">${s.id.substr(0, 12)}...</td>
                     <td class="text-muted">${(resolveSessionZone(s, zones)?.name) || 'Outside Zone'}</td>
-                    <td>${s.vehicleId || 'N/A'}</td>
+                    <td>${s.vehicle_id || 'N/A'}</td>
                     <td class="text-muted">${timeIn} - ${timeOut}</td>
-                    <td class="text-muted">${s.durationMinutes} min</td>
+                    <td class="text-muted">${s.duration_minutes} min</td>
                     <td>${badge}</td></tr>`;
             }).join('');
         }
@@ -668,7 +668,7 @@
             // Calculate average session duration
             const completedSessions = sessions.filter(s => s.status === 'completed');
             const avgDuration = completedSessions.length > 0
-                ? Math.round(completedSessions.reduce((sum, s) => sum + s.durationMinutes, 0) / completedSessions.length)
+                ? Math.round(completedSessions.reduce((sum, s) => sum + s.duration_minutes, 0) / completedSessions.length)
                 : 0;
 
             // KPIs
@@ -765,14 +765,19 @@
         $(document).ready(() => {
             console.log('[Dashboard] Booting...');
 
-            // Directly load dummy data if available
-            if (typeof DUMMY_ZONES !== 'undefined') {
-                window.ZONES = DUMMY_ZONES;
-                console.log('[Dashboard] Loaded dummy zones:', window.ZONES.length);
-            }
-            if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
-                window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
-                console.log('[Dashboard] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+            // Only load dummy data if USE_DUMMY_DATA is true (from app.js)
+            // Otherwise wait for Firebase data from app.js
+            if (typeof USE_DUMMY_DATA !== 'undefined' && USE_DUMMY_DATA) {
+                if (typeof DUMMY_ZONES !== 'undefined') {
+                    window.ZONES = DUMMY_ZONES;
+                    console.log('[Dashboard] Loaded dummy zones:', window.ZONES.length);
+                }
+                if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+                    window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+                    console.log('[Dashboard] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+                }
+            } else {
+                console.log('[Dashboard] Waiting for Firebase data (USE_DUMMY_DATA = false)');
             }
 
             console.log('[Dashboard] window.ZONES:', window.ZONES);

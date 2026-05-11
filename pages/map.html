@@ -8,7 +8,7 @@
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="../src/theme.css">
 
     <style>
         body,
@@ -420,12 +420,13 @@
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="geofencing-utils.js?v=2"></script>
-    <script src="compliance-utils.js"></script>
-    <script src="dummy-data.js"></script>
-    <script src="app.js"></script>
+    <script src="../src/geofencing-utils.js?v=2"></script>
+    <script src="../src/compliance-utils.js"></script>
+    <script src="../src/dummy-data.js"></script>
+    <script src="../src/app.js"></script>
     <script>
         // ---- Data ----
         // Zones will be loaded from Firebase (window.ZONES)
@@ -496,8 +497,8 @@
 
         // Resolve a session's effective zone via geofence containment (GPS is source of truth).
         function resolveSessionZone(session, zones) {
-            if (session.location && session.location.lat != null) {
-                return findZoneContainingLocation(session.location, zones);
+            if (session.lat != null && session.lng != null) {
+                return findZoneContainingLocation({ lat: session.lat, lng: session.lng }, zones);
             }
             return null;
         }
@@ -509,16 +510,16 @@
 
             const now = Date.now();
             sessions
-                .filter(s => s.status === 'active' && now >= s.startTime && now <= s.endTime)
+                .filter(s => s.status === 'active' && now >= s.start_time && now <= s.end_time)
                 .forEach(session => {
-                const remainingMs = session.endTime - Date.now();
+                const remainingMs = session.end_time - Date.now();
                 const remainingMin = Math.max(0, Math.round(remainingMs / 60000));
                 const containingZone = resolveSessionZone(session, zones);
 
                 // Outside every geofence → red diamond marker
                 if (!containingZone) {
-                    const lat = session.location?.lat;
-                    const lng = session.location?.lng;
+                    const lat = session.lat;
+                    const lng = session.lng;
                     if (lat == null || lng == null) return;
 
                     const icon = L.divIcon({
@@ -526,9 +527,9 @@
                         iconSize: [14, 14]
                     });
                     const marker = L.marker([lat, lng], { icon }).bindPopup(
-                        `<b>${session.vehicleId || 'Vehicle'}</b><br>
+                        `<b>${session.vehicle_id || 'Vehicle'}</b><br>
                          <span style="color:#ef4444;font-weight:600;">⚠ Outside Geofenced Zone</span><br>
-                         Session: ${session.sessionId.substr(0, 12)}…<br>
+                         Session: ${session.id.substr(0, 12)}…<br>
                          Remaining: ${remainingMin} min<br>
                          <small style="color:var(--text-secondary);">Not counted in zone compliance</small>`
                     );
@@ -537,11 +538,11 @@
                 }
 
                 // Inside a geofence → indigo dot (use real GPS, or scatter if at center)
-                let lat = session.location?.lat ?? containingZone.center.lat;
-                let lng = session.location?.lng ?? containingZone.center.lng;
+                let lat = session.lat ?? containingZone.center.lat;
+                let lng = session.lng ?? containingZone.center.lng;
                 const isAtCenter = lat === containingZone.center.lat && lng === containingZone.center.lng;
                 if (isAtCenter) {
-                    const { dLat, dLng } = scatterOffset(session.sessionId, containingZone.radius || 50);
+                    const { dLat, dLng } = scatterOffset(session.id, containingZone.radius || 50);
                     lat += dLat;
                     lng += dLng;
                 }
@@ -551,9 +552,9 @@
                     iconSize: [12, 12]
                 });
                 const marker = L.marker([lat, lng], { icon }).bindPopup(
-                    `<b>${session.vehicleId || 'Vehicle'}</b><br>
+                    `<b>${session.vehicle_id || 'Vehicle'}</b><br>
                      Zone: ${containingZone.name}<br>
-                     Session: ${session.sessionId.substr(0, 12)}…<br>
+                     Session: ${session.id.substr(0, 12)}…<br>
                      Remaining: ${remainingMin} min`
                 );
                 payerLayer.addLayer(marker);
@@ -624,7 +625,7 @@
             let activeOutside = 0;
             sessions.forEach(s => {
                 if (s.status !== 'active') return;
-                if (now < s.startTime || now > s.endTime) return;
+                if (now < s.start_time || now > s.end_time) return;
                 const z = resolveSessionZone(s, zones);
                 if (z) activeByZone[z.id] = (activeByZone[z.id] || 0) + 1;
                 else activeOutside++;
@@ -734,19 +735,30 @@
         }
 
         // Initial render
-        // Directly load dummy data if available
-        if (typeof DUMMY_ZONES !== 'undefined') {
-            window.ZONES = DUMMY_ZONES;
-            console.log('[Map] Loaded dummy zones:', window.ZONES.length);
-        }
-        if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
-            window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
-            console.log('[Map] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+        // Only load dummy data if USE_DUMMY_DATA is true (from app.js)
+        // Otherwise wait for Firebase data from app.js
+        if (typeof USE_DUMMY_DATA !== 'undefined' && USE_DUMMY_DATA) {
+            if (typeof DUMMY_ZONES !== 'undefined') {
+                window.ZONES = DUMMY_ZONES;
+                console.log('[Map] Loaded dummy zones:', window.ZONES.length);
+            }
+            if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+                window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+                console.log('[Map] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+            }
+        } else {
+            console.log('[Map] Waiting for Firebase data (USE_DUMMY_DATA = false)');
         }
         setTimeout(renderZones, 1000);
 
         // Update zones when data changes
         setInterval(renderZones, 30000);
+
+        // ---- Re-render when Firebase data arrives from app.js ----
+        window.addEventListener('parkingDataUpdated', () => {
+            console.log('[Map] Received parkingDataUpdated event, re-rendering');
+            renderZones();
+        });
 
         // ---- Listen for theme changes from the parent shell ----
         window.addEventListener('message', (e) => {

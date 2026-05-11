@@ -12,22 +12,22 @@ const DB_NAME = 'SmartParkingDB_GPS';
 // ============================================================
 // DUMMY DATA MODE (for testing without Firebase)
 // ============================================================
-const USE_DUMMY_DATA = true; // Set to false to use real Firebase data
+const USE_DUMMY_DATA = false; // Set to false to use real Firebase data
 
 // Load Firebase configuration from separate file
 // In production, this would be loaded from environment variables
 let FIREBASE_CONFIG;
 try {
     FIREBASE_CONFIG = {
-        apiKey: process?.env?.FIREBASE_API_KEY || "YOUR_API_KEY",
-        authDomain: process?.env?.FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
-        projectId: process?.env?.FIREBASE_PROJECT_ID || "your-project-id",
-        storageBucket: process?.env?.FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
-        messagingSenderId: process?.env?.FIREBASE_MESSAGING_SENDER_ID || "123456789",
-        appId: process?.env?.FIREBASE_APP_ID || "1:123456789:web:abcdef123456"
+        apiKey:            "AIzaSyDEyDj-bW8rRgaivvfNPVub8AfWMDpbWdY",
+        authDomain:        "gpark-9eed8.firebaseapp.com",
+        projectId:         "gpark-9eed8",
+        storageBucket:     "gpark-9eed8.firebasestorage.app",
+        messagingSenderId: "517710435374",
+        appId:             "1:517710435374:web:7ca16215d5ab4422243bbf"
     };
 } catch (e) {
-    //console.warn('[Config] Using default Firebase config - please update with your credentials');
+    console.warn('[Config] Using default Firebase config - please update with your credentials');
     FIREBASE_CONFIG = {
         apiKey: "YOUR_API_KEY",
         authDomain: "your-project.firebaseapp.com",
@@ -162,33 +162,85 @@ function initFirebase() {
         firestore = firebase.firestore();
         window.firebaseDB = firestore;
 
-        // Firestore collection references
+        // Firestore collection references (match schema)
         zonesRef = firestore.collection('zones');
-        paymentSessionsRef = firestore.collection('paymentSessions');
-        complianceSnapshotsRef = firestore.collection('complianceSnapshots');
-        dailySummaryRef = firestore.collection('dailySummary');
+        paymentSessionsRef = firestore.collection('parking_sessions');
+        complianceSnapshotsRef = firestore.collection('compliance_snapshots');
+        dailySummaryRef = firestore.collection('daily_summary');
 
         // Listen for real-time zone changes
         zonesRef.onSnapshot((snapshot) => {
+            console.log('[Firebase] Zones snapshot received:', snapshot.size, 'documents');
             zones = [];
             snapshot.forEach(doc => {
                 zones.push({ id: doc.id, ...doc.data() });
             });
             window.ZONES = zones;
+            console.log('[Firebase] window.ZONES set:', window.ZONES.length, 'zones');
             updateAll();
+            window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+        }, (err) => {
+            console.error('[Firebase] Zones listener error:', err);
         });
 
         // Listen for real-time payment session changes
         paymentSessionsRef
-            .where('status', '==', 'active')
             .onSnapshot((snapshot) => {
+                console.log('[Firebase] Payment sessions snapshot received:', snapshot.size, 'documents');
                 paymentSessions = [];
                 snapshot.forEach(doc => {
-                    paymentSessions.push({ sessionId: doc.id, ...doc.data() });
+                    // Map snake_case Firestore fields to app format
+                    const data = doc.data();
+                    // Convert Firestore Timestamps to milliseconds if needed
+                    // Handle both Admin SDK format (_seconds) and Web SDK format (seconds + toMillis)
+                    const toMillis = (ts) => {
+                        if (ts && typeof ts === 'object') {
+                            // Web SDK Timestamp has toMillis() method
+                            if (typeof ts.toMillis === 'function') {
+                                return ts.toMillis();
+                            }
+                            // Admin SDK format has _seconds
+                            if (ts._seconds !== undefined) {
+                                return ts._seconds * 1000;
+                            }
+                            // Web SDK format has seconds property
+                            if (ts.seconds !== undefined) {
+                                return ts.seconds * 1000;
+                            }
+                        }
+                        return ts;
+                    };
+                    const startMs = toMillis(data.start_time);
+                    const endMs = toMillis(data.end_time);
+                    const now = Date.now();
+
+                    // Compute real status based on current time (don't trust stored status)
+                    let realStatus;
+                    if (now < startMs) {
+                        realStatus = 'upcoming';
+                    } else if (now > endMs) {
+                        realStatus = 'completed';
+                    } else {
+                        realStatus = 'active';
+                    }
+
+                    paymentSessions.push({
+                        ...data,
+                        id: doc.id,
+                        start_time: startMs,
+                        end_time: endMs,
+                        status: realStatus,
+                        created_at: toMillis(data.created_at),
+                        updated_at: toMillis(data.updated_at)
+                    });
                 });
                 window.PAYMENT_SESSIONS = paymentSessions;
+                console.log('[Firebase] window.PAYMENT_SESSIONS set:', window.PAYMENT_SESSIONS.length, 'sessions');
                 calculateAndStoreCompliance();
                 updateAll();
+                window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+            }, (err) => {
+                console.error('[Firebase] Payment sessions listener error:', err);
             });
 
         // Listen for real-time compliance snapshot changes
@@ -198,7 +250,29 @@ function initFirebase() {
             .onSnapshot((snapshot) => {
                 complianceSnapshots = [];
                 snapshot.forEach(doc => {
-                    complianceSnapshots.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    // Convert Firestore Timestamps to milliseconds if needed
+                    // Handle both Admin SDK format (_seconds) and Web SDK format (seconds + toMillis)
+                    const toMillis = (ts) => {
+                        if (ts && typeof ts === 'object') {
+                            if (typeof ts.toMillis === 'function') {
+                                return ts.toMillis();
+                            }
+                            if (ts._seconds !== undefined) {
+                                return ts._seconds * 1000;
+                            }
+                            if (ts.seconds !== undefined) {
+                                return ts.seconds * 1000;
+                            }
+                        }
+                        return ts;
+                    };
+                    complianceSnapshots.push({
+                        ...data,
+                        id: doc.id,
+                        timestamp: toMillis(data.timestamp),
+                        created_at: toMillis(data.created_at)
+                    });
                 });
                 window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
             });
@@ -216,7 +290,7 @@ function initFirebase() {
 async function syncPaymentSessionToFirebase(session) {
     if (!paymentSessionsRef) return;
     try {
-        await paymentSessionsRef.doc(session.sessionId).set(session);
+        await paymentSessionsRef.doc(session.id).set(session);
     } catch (err) {
         console.error('[Firebase] Failed to sync payment session:', err);
         await saveOfflineData('offlineQueue', {
@@ -475,15 +549,18 @@ async function createPaymentSession(zoneId, vehicleId, location, durationMinutes
     const now = Date.now();
 
     const session = {
-        sessionId: sessionId,
-        vehicleId: vehicleId,
-        location: location,
-        startTime: now,
-        endTime: now + (durationMinutes * 60 * 1000),
-        durationMinutes: durationMinutes,
+        id: sessionId,
+        vehicle_id: vehicleId,
+        lat: location.lat,
+        lng: location.lng,
+        zone_id: zoneId,
+        start_time: now,
+        end_time: now + (durationMinutes * 60 * 1000),
+        duration_minutes: durationMinutes,
         status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        is_compliant: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
     };
 
     // Sync to Firestore
@@ -502,15 +579,15 @@ async function createPaymentSession(zoneId, vehicleId, location, durationMinutes
  * @param {string} sessionId - Session ID to end
  */
 async function endPaymentSession(sessionId) {
-    const session = paymentSessions.find(s => s.sessionId === sessionId);
+    const session = paymentSessions.find(s => s.id === sessionId);
     if (!session) {
         showNotification('Session not found', 'danger');
         return;
     }
 
     session.status = 'completed';
-    session.endTime = Date.now();
-    session.updatedAt = new Date().toISOString();
+    session.end_time = Date.now();
+    session.updated_at = new Date().toISOString();
 
     await syncPaymentSessionToFirebase(session);
     await saveOfflineData('paymentSessions', session);
@@ -524,14 +601,14 @@ async function endPaymentSession(sessionId) {
  * @param {string} sessionId - Session ID to cancel
  */
 async function cancelPaymentSession(sessionId) {
-    const session = paymentSessions.find(s => s.sessionId === sessionId);
+    const session = paymentSessions.find(s => s.id === sessionId);
     if (!session) {
         showNotification('Session not found', 'danger');
         return;
     }
 
     session.status = 'cancelled';
-    session.updatedAt = new Date().toISOString();
+    session.updated_at = new Date().toISOString();
 
     await syncPaymentSessionToFirebase(session);
     await saveOfflineData('paymentSessions', session);
@@ -550,14 +627,14 @@ async function cancelPaymentSession(sessionId) {
 function calculateAndStoreCompliance() {
     const currentTime = Date.now();
 
-    // Bucket sessions into the zone that GPS-contains them, ignoring stored zoneId.
+    // Bucket sessions into the zone that GPS-contains them, ignoring stored zone_id.
     // Only sessions that are active AND currently within their time window are counted.
     const activeByZone = {};
     paymentSessions.forEach(session => {
         if (session.status !== 'active') return;
-        if (currentTime < session.startTime || currentTime > session.endTime) return;
-        const containingZone = (session.location && session.location.lat != null)
-            ? findZoneForCoords(session.location, zones)
+        if (currentTime < session.start_time || currentTime > session.end_time) return;
+        const containingZone = (session.lat != null && session.lng != null)
+            ? findZoneForCoords({ lat: session.lat, lng: session.lng }, zones)
             : null;
         if (!containingZone) return;
         activeByZone[containingZone.id] = (activeByZone[containingZone.id] || 0) + 1;
@@ -569,14 +646,14 @@ function calculateAndStoreCompliance() {
         const statusColor = getComplianceStatusColor(complianceRate, COMPLIANCE_THRESHOLDS);
 
         const snapshot = {
-            zoneId: zone.id,
-            zoneName: zone.name,
+            zone_id: zone.id,
+            zone_name: zone.name,
             timestamp: currentTime,
-            activeSessions: activeCount,
-            totalLots: zone.totalLots,
-            complianceRate: complianceRate,
-            statusColor: statusColor,
-            createdAt: new Date().toISOString()
+            active_sessions: activeCount,
+            total_lots: zone.totalLots,
+            compliance_rate: complianceRate,
+            status_color: statusColor,
+            created_at: new Date().toISOString()
         };
 
         // Sync to Firestore
@@ -637,7 +714,7 @@ function updateStats() {
     const now = Date.now();
     const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
     const activeSessionsCount = paymentSessions.filter(s =>
-        s.status === 'active' && now >= s.startTime && now <= s.endTime
+        s.status === 'active' && now >= s.start_time && now <= s.end_time
     ).length;
 
     // Calculate overall compliance based on GPS location within geofences (time-window aware)
@@ -645,9 +722,9 @@ function updateStats() {
     zones.forEach(zone => {
         const activeInZone = paymentSessions.filter(s => {
             if (s.status !== 'active') return false;
-            if (now < s.startTime || now > s.endTime) return false;
-            if (!s.location || s.location.lat == null) return false;
-            return isWithinGeofence(s.location, zone);
+            if (now < s.start_time || now > s.end_time) return false;
+            if (s.lat == null || s.lng == null) return false;
+            return isWithinGeofence({ lat: s.lat, lng: s.lng }, zone);
         }).length;
         totalCompliance += calculateComplianceRate(activeInZone, zone.totalLots);
     });
@@ -765,7 +842,7 @@ async function syncOfflineQueue() {
         for (let item of offlineQueue) {
             console.log('Processing queued item:', item);
             if (item.action === 'syncPaymentSession' && paymentSessionsRef) {
-                await paymentSessionsRef.doc(item.data.sessionId).set(item.data);
+                await paymentSessionsRef.doc(item.data.id).set(item.data);
             }
             if (item.action === 'syncComplianceSnapshot' && complianceSnapshotsRef) {
                 await complianceSnapshotsRef.add(item.data);

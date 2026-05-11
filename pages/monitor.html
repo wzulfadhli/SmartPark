@@ -8,7 +8,7 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="../src/theme.css">
 
     <style>
         body {
@@ -239,23 +239,23 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="geofencing-utils.js?v=2"></script>
-    <script src="compliance-utils.js"></script>
-    <script src="dummy-data.js"></script>
-    <script src="app.js"></script>
+    <script src="../src/geofencing-utils.js?v=2"></script>
+    <script src="../src/compliance-utils.js"></script>
+    <script src="../src/dummy-data.js"></script>
+    <script src="../src/app.js"></script>
 
     <script>
         // COMPLIANCE_THRESHOLDS is provided as a global by app.js (already loaded above).
 
         // True if session is paid AND currently within its time window
         function isSessionActiveNow(s, now) {
-            return s.status === 'active' && now >= s.startTime && now <= s.endTime;
+            return s.status === 'active' && now >= s.start_time && now <= s.end_time;
         }
 
         // Returns the zone that GPS-contains the session
         function resolveSessionZone(session, zones) {
-            if (session.location && session.location.lat != null) {
-                return findZoneForCoords(session.location, zones);
+            if (session.lat != null && session.lng != null) {
+                return findZoneForCoords({ lat: session.lat, lng: session.lng }, zones);
             }
             return null;
         }
@@ -309,7 +309,7 @@
                 } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
                 if (statusVal && s.status !== statusVal) return false;
                 if (searchVal) {
-                    const hay = ((s.sessionId || '') + ' ' + (s.vehicleId || '')).toLowerCase();
+                    const hay = ((s.id || '') + ' ' + (s.vehicle_id || '')).toLowerCase();
                     if (!hay.includes(searchVal)) return false;
                 }
                 return true;
@@ -324,17 +324,17 @@
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No active sessions</td></tr>';
                 } else {
                     tbody.innerHTML = filtered.map(s => {
-                        const startTime = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const startTime = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const containingZone = resolveSessionZone(s, zones);
                         const zoneLabel = containingZone ? containingZone.name : '<span class="text-danger">Outside</span>';
                         const badge = '<span class="badge bg-success">Active</span>';
-                        const sid = (s.sessionId || '').toString();
+                        const sid = (s.id || '').toString();
                         return `<tr>
                             <td class="small">${sid.substring(0, 12)}...</td>
                             <td>${zoneLabel}</td>
-                            <td>${s.vehicleId || 'N/A'}</td>
+                            <td>${s.vehicle_id || 'N/A'}</td>
                             <td>${startTime}</td>
-                            <td>${s.durationMinutes} min</td>
+                            <td>${s.duration_minutes} min</td>
                             <td>${badge}</td>
                         </tr>`;
                     }).join('');
@@ -391,15 +391,21 @@
         });
 
         // Initial load
-        // Directly load dummy data if available
-        if (typeof DUMMY_ZONES !== 'undefined') {
-            window.ZONES = DUMMY_ZONES;
-            console.log('[Monitor] Loaded dummy zones:', window.ZONES.length);
+        // Only load dummy data if USE_DUMMY_DATA is true (from app.js)
+        // Otherwise wait for Firebase data from app.js
+        if (typeof USE_DUMMY_DATA !== 'undefined' && USE_DUMMY_DATA) {
+            if (typeof DUMMY_ZONES !== 'undefined') {
+                window.ZONES = DUMMY_ZONES;
+                console.log('[Monitor] Loaded dummy zones:', window.ZONES.length);
+            }
+            if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
+                window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
+                console.log('[Monitor] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
+            }
+        } else {
+            console.log('[Monitor] Waiting for Firebase data (USE_DUMMY_DATA = false)');
         }
-        if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
-            window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
-            console.log('[Monitor] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
-        }
+
         // Filter listeners
         document.getElementById('filterZone').addEventListener('change', updateMonitor);
         document.getElementById('filterStatus').addEventListener('change', updateMonitor);
