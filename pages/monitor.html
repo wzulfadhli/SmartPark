@@ -241,36 +241,18 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="../src/config.js"></script>
+    <script src="../src/zones-config.js"></script>
+    <script src="../src/session-utils.js"></script>
     <script src="../src/geofencing-utils.js?v=2"></script>
     <script src="../src/compliance-utils.js"></script>
     <script src="../src/dummy-data.js"></script>
     <script src="../src/app.js"></script>
+    <script src="../src/ui-helpers.js"></script>
 
     <script>
-        // COMPLIANCE_THRESHOLDS is provided as a global by app.js (already loaded above).
-
-        // Convert Firestore Timestamp / plain ms / Date to milliseconds
-        function toMillis(ts) {
-            if (ts && typeof ts === 'object') {
-                if (typeof ts.toMillis === 'function') return ts.toMillis();
-                if (ts._seconds !== undefined) return ts._seconds * 1000;
-                if (ts.seconds !== undefined) return ts.seconds * 1000;
-            }
-            return ts;
-        }
-
-        // True if session is paid AND currently within its time window
-        function isSessionActiveNow(s, now) {
-            return s.status === 'active' && now >= s.start_time && now <= s.end_time;
-        }
-
-        // Returns the zone that GPS-contains the session
-        function resolveSessionZone(session, zones) {
-            if (session.lat != null && session.lng != null) {
-                return findZoneForCoords({ lat: session.lat, lng: session.lng }, zones);
-            }
-            return null;
-        }
+        // Shared helpers: toMillis, isSessionActiveNow, resolveSessionZone,
+        // bucketActiveByZone, getStatusColorHex are provided as globals by ui-helpers.js.
 
         // Update monitor with zones and payment sessions
         function updateMonitor() {
@@ -278,15 +260,8 @@
             const sessions = window.PAYMENT_SESSIONS || [];
             const now = Date.now();
 
-            // Bucket each truly-active session by its containing zone (GPS, not stored zoneId)
-            const activeByZone = {};
-            const trulyActive = [];
-            sessions.forEach(s => {
-                if (!isSessionActiveNow(s, now)) return;
-                trulyActive.push(s);
-                const z = resolveSessionZone(s, zones);
-                if (z) activeByZone[z.id] = (activeByZone[z.id] || 0) + 1;
-            });
+            // Single bucketing pass via UIHelpers
+            const { activeByZone, totalActive } = bucketActiveByZone(sessions, zones, now);
 
             // Summary stats
             const totalLots = zones.reduce((sum, zone) => sum + zone.totalLots, 0);
@@ -299,41 +274,24 @@
 
             document.getElementById('totalZones').textContent = zones.length;
             document.getElementById('totalLots').textContent = totalLots;
-            document.getElementById('activeSessions').textContent = trulyActive.length;
+            document.getElementById('activeSessions').textContent = totalActive;
             document.getElementById('avgCompliance').textContent = avgCompliance.toFixed(1) + '%';
 
-            // Populate zone filter dropdown
+            // Populate zone filter dropdown via UIHelpers
             const zoneFilter = document.getElementById('filterZone');
-            const currentZoneVal = zoneFilter.value;
-            zoneFilter.innerHTML = '<option value="">All Zones</option><option value="outside">Outside Zone</option>';
-            zones.forEach(z => {
-                zoneFilter.innerHTML += `<option value="${z.id}">${z.name}</option>`;
-            });
-            if (currentZoneVal) zoneFilter.value = currentZoneVal;
+            UIHelpers.populateZoneFilter(zoneFilter, zones, true);
 
-            // Apply filters
-            const statusVal = document.getElementById('filterStatus').value;
-            const dateVal = document.getElementById('filterDate').value;
-            const searchVal = document.getElementById('filterSearch').value.trim().toLowerCase();
-            const filtered = trulyActive.filter(s => {
-                const containingZone = resolveSessionZone(s, zones);
-                if (zoneFilter.value === 'outside') {
-                    if (containingZone) return false;
-                } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
-                if (statusVal && s.status !== statusVal) return false;
-                if (dateVal) {
-                    const d = new Date(toMillis(s.start_time));
-                    const sessionDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                    if (sessionDate !== dateVal) return false;
-                }
-                if (searchVal) {
-                    const hay = ((s.id || '') + ' ' + (s.vehicle_id || '')).toLowerCase();
-                    if (!hay.includes(searchVal)) return false;
-                }
-                return true;
+            // Apply filters via UIHelpers
+            const filtered = UIHelpers.filterSessions(sessions, {
+                zones: zones,
+                zoneFilterValue: zoneFilter.value,
+                statusFilterValue: document.getElementById('filterStatus').value,
+                dateFilterValue: document.getElementById('filterDate').value,
+                searchValue: document.getElementById('filterSearch').value,
+                onlyActive: true
             });
             document.getElementById('filterCount').textContent =
-                filtered.length === trulyActive.length ? `${trulyActive.length} sessions` : `${filtered.length} of ${trulyActive.length}`;
+                filtered.length === totalActive ? `${totalActive} sessions` : `${filtered.length} of ${totalActive}`;
 
             // Active sessions table
             try {
@@ -342,11 +300,10 @@
                     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No active sessions</td></tr>';
                 } else {
                     tbody.innerHTML = filtered.map(s => {
-                        const dateStr = new Date(toMillis(s.start_time)).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-                        const startTime = new Date(toMillis(s.start_time)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const dateStr = UIHelpers.formatDate(s.start_time);
+                        const startTime = UIHelpers.formatTime(s.start_time);
                         const containingZone = resolveSessionZone(s, zones);
                         const zoneLabel = containingZone ? containingZone.name : '<span class="text-danger">Outside</span>';
-                        const badge = '<span class="badge bg-success">Active</span>';
                         const sid = (s.id || '').toString();
                         return `<tr>
                             <td class="small">${sid.substring(0, 12)}...</td>
@@ -355,7 +312,7 @@
                             <td>${s.vehicle_id || 'N/A'}</td>
                             <td>${startTime}</td>
                             <td>${s.duration_minutes} min</td>
-                            <td>${badge}</td>
+                            <td>${UIHelpers.statusBadgeHtml(s.status)}</td>
                         </tr>`;
                     }).join('');
                 }
@@ -390,11 +347,6 @@
             }
         }
 
-        function getStatusColorHex(statusColor) {
-            const colors = { green: '#10b981', orange: '#f59e0b', red: '#ef4444' };
-            return colors[statusColor] || '#6b7280';
-        }
-
         // Re-render when app.js dispatches data updates (e.g., Firebase changes)
         window.addEventListener('parkingDataUpdated', updateMonitor);
 
@@ -411,20 +363,7 @@
         });
 
         // Initial load
-        // Only load dummy data if USE_DUMMY_DATA is true (from app.js)
-        // Otherwise wait for Firebase data from app.js
-        if (typeof USE_DUMMY_DATA !== 'undefined' && USE_DUMMY_DATA) {
-            if (typeof DUMMY_ZONES !== 'undefined') {
-                window.ZONES = DUMMY_ZONES;
-                console.log('[Monitor] Loaded dummy zones:', window.ZONES.length);
-            }
-            if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
-                window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
-                console.log('[Monitor] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
-            }
-        } else {
-            console.log('[Monitor] Waiting for Firebase data (USE_DUMMY_DATA = false)');
-        }
+        UIHelpers.bootstrapDummyData('Monitor');
 
         // Filter listeners
         document.getElementById('filterZone').addEventListener('change', updateMonitor);

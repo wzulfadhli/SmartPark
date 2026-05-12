@@ -13,6 +13,12 @@
 // ============================================================
 
 const admin = require('firebase-admin');
+const path = require('path');
+
+// ---- Shared modules ----
+const SP_CONFIG = require(path.join(__dirname, '..', 'src', 'config'));
+const SU = require(path.join(__dirname, '..', 'src', 'session-utils'));
+const { findZoneForCoords } = require(path.join(__dirname, '..', 'src', 'geofencing-utils'));
 
 // ---- Init ----
 const useEmulator = process.env.FIRESTORE_EMULATOR_HOST;
@@ -27,159 +33,38 @@ admin.initializeApp({
 const db = admin.firestore();
 const Timestamp = admin.firestore.Timestamp;
 
-// ---- Config ----
-const GENERATE_INTERVAL_MS = 2 * 60 * 1000;   // New batch every 2 minutes
-const EXPIRE_CHECK_MS     = 5 * 60 * 1000;    // Mark expired sessions every 5 minutes
-const COMPLIANCE_SNAPSHOT_MS = 5 * 60 * 1000; // Write compliance snapshot every 5 minutes
-const SESSIONS_PER_BATCH = 5;                  // New sessions per batch
-const MAX_TOTAL_SESSIONS = 300;               // Keep total under this (soft limit)
+// ---- Config from centralized config.js ----
+const SESSIONS_PER_BATCH = SP_CONFIG.GENERATOR.SESSIONS_PER_BATCH;
+const MAX_TOTAL_SESSIONS = SP_CONFIG.GENERATOR.MAX_TOTAL_SESSIONS;
+const OUTSIDE_PROB       = SP_CONFIG.GENERATOR.OUTSIDE_PROBABILITY;
+const DUR_MIN            = SP_CONFIG.GENERATOR.DURATION_MIN_MINUTES;
+const DUR_MAX            = SP_CONFIG.GENERATOR.DURATION_MAX_MINUTES;
+const COLLECTIONS        = SP_CONFIG.COLLECTIONS;
 
-// Seeded pseudo-random
-let _seed = Date.now() % 2147483647;
-function seededRandom() {
-    _seed = (_seed * 16807 + 0) % 2147483647;
-    return (_seed - 1) / 2147483646;
-}
-
-function randomVehicleId() {
-    const num = Math.floor(seededRandom() * 900) + 100;
-    return `VEH_${num}`;
-}
-
+// ---- Shorthand Timestamp helpers ----
 function tsNow() { return Timestamp.fromMillis(Date.now()); }
 function tsOffset(offsetMinutes) { return Timestamp.fromMillis(Date.now() + offsetMinutes * 60 * 1000); }
-
-// ---- Operating hours helpers ----
-// Parking operation: 8:00 AM - 6:00 PM
-const OP_START_HOUR = 8;
-const OP_END_HOUR = 18;
-
-function getTodayAtHour(hour) {
-    const d = new Date();
-    d.setHours(hour, 0, 0, 0);
-    return d.getTime();
-}
-
-function clampToOperatingHours(startMs, endMs) {
-    const opStart = getTodayAtHour(OP_START_HOUR);
-    const opEnd = getTodayAtHour(OP_END_HOUR);
-    if (startMs < opStart) startMs = opStart;
-    if (endMs > opEnd) endMs = opEnd;
-    if (startMs >= endMs) {
-        endMs = startMs + 5 * 60 * 1000; // minimum 5-min session
-    }
-    return { startMs, endMs };
-}
-
-function computeStatus(startMs, endMs) {
-    const nowMs = Date.now();
-    if (nowMs < startMs) return 'upcoming';
-    if (nowMs > endMs) return 'completed';
-    return 'active';
-}
 
 // ---- Zones cache ----
 let ZONES = [];
 async function loadZones() {
-    const snap = await db.collection('zones').get();
+    const snap = await db.collection(COLLECTIONS.ZONES).get();
     ZONES = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     console.log(`[Generator] Loaded ${ZONES.length} zones`);
-}
-
-function locationForZone(zone) {
-    if (zone.line && zone.line.length >= 2) {
-        const buf = (zone.bufferMeters || 20) * 0.8;
-        const segIdx = Math.floor(seededRandom() * (zone.line.length - 1));
-        const p1 = zone.line[segIdx], p2 = zone.line[segIdx + 1];
-        const t = seededRandom();
-        const baseLat = p1.lat + t * (p2.lat - p1.lat);
-        const baseLng = p1.lng + t * (p2.lng - p1.lng);
-        const dLat = p2.lat - p1.lat, dLng = p2.lng - p1.lng;
-        const len = Math.sqrt(dLat * dLat + dLng * dLng);
-        const cosLat = Math.cos(baseLat * Math.PI / 180);
-        const perpLat = (-dLng / len) * (buf / 111320);
-        const perpLng = (dLat / len) * (buf / (111320 * cosLat));
-        const side = (seededRandom() < 0.5 ? 1 : -1) * seededRandom();
-        return { lat: baseLat + perpLat * side, lng: baseLng + perpLng * side };
-    }
-    const radius = zone.radius || 100;
-    const angle = seededRandom() * 2 * Math.PI;
-    const dist = Math.sqrt(seededRandom()) * radius * 0.8;
-    const dLat = (dist * Math.cos(angle)) / 111320;
-    const dLng = (dist * Math.sin(angle)) / (111320 * Math.cos(zone.center.lat * Math.PI / 180));
-    return { lat: zone.center.lat + dLat, lng: zone.center.lng + dLng };
-}
-
-// Generate a location just outside a zone's geofence (for non-compliant payers)
-function outsideLocationForZone(zone) {
-    if (zone.line && zone.line.length >= 2) {
-        const p1 = zone.line[0], p2 = zone.line[zone.line.length - 1];
-        const midLat = (p1.lat + p2.lat) / 2;
-        const midLng = (p1.lng + p2.lng) / 2;
-        const buf = (zone.bufferMeters || 20);
-        const cosLat = Math.cos(midLat * Math.PI / 180);
-        const beyond = 25 + Math.floor(seededRandom() * 80); // 25-105 m beyond
-        const bearing = seededRandom() * 360;
-        const rad = (bearing * Math.PI) / 180;
-        const dLat = (beyond * Math.cos(rad)) / 111320;
-        const dLng = (beyond * Math.sin(rad)) / (111320 * cosLat);
-        return { lat: midLat + dLat, lng: midLng + dLng };
-    }
-    const radius = zone.radius || 100;
-    const beyond = 20 + Math.floor(seededRandom() * 80); // 20-100 m beyond radius
-    const angle = seededRandom() * 2 * Math.PI;
-    const dLat = (beyond * Math.cos(angle)) / 111320;
-    const dLng = (beyond * Math.sin(angle)) / (111320 * Math.cos(zone.center.lat * Math.PI / 180));
-    return { lat: zone.center.lat + dLat, lng: zone.center.lng + dLng };
-}
-
-function findZoneForCoords(coords, zones) {
-    for (const zone of zones) {
-        if (zone.line && zone.line.length >= 2) {
-            for (let i = 0; i < zone.line.length - 1; i++) {
-                const p1 = zone.line[i], p2 = zone.line[i + 1];
-                const cosLat = Math.cos(((p1.lat + p2.lat) / 2) * Math.PI / 180);
-                const bx = (p2.lng - p1.lng) * 111320 * cosLat;
-                const by = (p2.lat - p1.lat) * 111320;
-                const qx = (coords.lng - p1.lng) * 111320 * cosLat;
-                const qy = (coords.lat - p1.lat) * 111320;
-                const roadLen = Math.sqrt(bx * bx + by * by);
-                if (roadLen === 0) continue;
-                const ux = bx / roadLen, uy = by / roadLen;
-                const along = qx * ux + qy * uy;
-                const perp = Math.abs(-qx * uy + qy * ux);
-                if (along >= 0 && along <= roadLen && perp <= (zone.bufferMeters || 20)) return zone;
-            }
-        } else {
-            const R = 6371e3;
-            const φ1 = coords.lat * Math.PI / 180;
-            const φ2 = zone.center.lat * Math.PI / 180;
-            const Δφ = (zone.center.lat - coords.lat) * Math.PI / 180;
-            const Δλ = (zone.center.lng - coords.lng) * Math.PI / 180;
-            const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-            const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            if (dist <= zone.radius) return zone;
-        }
-    }
-    return null;
 }
 
 // ---- 1. Generate new sessions ----
 async function generateNewSessions() {
     if (ZONES.length === 0) await loadZones();
 
-    const nowMs = Date.now();
-    const opStart = getTodayAtHour(OP_START_HOUR);
-    const opEnd = getTodayAtHour(OP_END_HOUR);
-
     // Only generate during operating hours
-    if (nowMs < opStart || nowMs > opEnd) {
-        console.log(`[Generator] Outside operating hours (${new Date().toLocaleTimeString()}), skipping new session generation`);
+    if (!SU.isWithinOperatingHours()) {
+        console.log(`[Generator] Outside operating hours (${new Date().toLocaleTimeString()}), skipping`);
         return;
     }
 
     // Check current count
-    const allSnap = await db.collection('parking_sessions').get();
+    const allSnap = await db.collection(COLLECTIONS.PARKING_SESSIONS).get();
     if (allSnap.size >= MAX_TOTAL_SESSIONS) {
         console.log(`[Generator] Session limit reached (${allSnap.size}), skipping generation`);
         return;
@@ -189,31 +74,30 @@ async function generateNewSessions() {
     const created = [];
 
     for (let i = 0; i < SESSIONS_PER_BATCH; i++) {
-        const zone = ZONES[Math.floor(seededRandom() * ZONES.length)];
-        const startOffset = Math.floor(seededRandom() * 3) - 1; // -1 to +2 min from now
-        let duration = 30 + Math.floor(seededRandom() * 90); // 30-120 min
+        const zone = ZONES[Math.floor(SU.seededRandom() * ZONES.length)];
+        const startOffset = Math.floor(SU.seededRandom() * 3) - 1;
+        let duration = DUR_MIN + Math.floor(SU.seededRandom() * (DUR_MAX - DUR_MIN));
         let startMs = tsOffset(startOffset).toMillis();
         let endMs = startMs + duration * 60 * 1000;
 
-        // Clamp to operating hours
-        const clamped = clampToOperatingHours(startMs, endMs);
+        const clamped = SU.clampToOperatingHours(startMs, endMs);
         startMs = clamped.startMs;
         endMs = clamped.endMs;
         duration = Math.round((endMs - startMs) / 60000);
 
         const startTs = Timestamp.fromMillis(startMs);
         const endTs = Timestamp.fromMillis(endMs);
-        const status = computeStatus(startMs, endMs);
+        const status = SU.computeStatus(startMs, endMs);
 
-        // 10% chance: outside-zone payer (paid but not inside any geofence)
-        const isOutside = seededRandom() < 0.10;
-        const loc = isOutside ? outsideLocationForZone(zone) : locationForZone(zone);
+        const isOutside = SU.seededRandom() < OUTSIDE_PROB;
+        const loc = isOutside ? SU.outsideLocationForZone(zone) : SU.locationForZone(zone);
         const zoneId = isOutside ? null : zone.id;
         const isCompliant = isOutside ? false : (status === 'active');
+        const vehicleId = SU.randomVehicleId();
 
-        const extRef = db.collection('external_payment_sessions').doc();
+        const extRef = db.collection(COLLECTIONS.EXTERNAL_PAYMENT_SESSIONS).doc();
         batch.set(extRef, {
-            vehicle_id: randomVehicleId(),
+            vehicle_id: vehicleId,
             lat: loc.lat,
             lng: loc.lng,
             start_time: startTs,
@@ -225,10 +109,10 @@ async function generateNewSessions() {
             updated_at: tsNow(),
         });
 
-        const psRef = db.collection('parking_sessions').doc();
+        const psRef = db.collection(COLLECTIONS.PARKING_SESSIONS).doc();
         batch.set(psRef, {
             external_session_id: extRef.id,
-            vehicle_id: randomVehicleId(),
+            vehicle_id: vehicleId,
             lat: loc.lat,
             lng: loc.lng,
             zone_id: zoneId,
@@ -241,7 +125,7 @@ async function generateNewSessions() {
             created_at: tsNow(),
         });
 
-        created.push({ vehicle: randomVehicleId(), zone: zone.name, duration });
+        created.push({ vehicle: vehicleId, zone: zone.name, duration });
     }
 
     await batch.commit();
@@ -252,7 +136,7 @@ async function generateNewSessions() {
 // ---- 2. Mark expired sessions as 'completed' ----
 async function markExpiredSessions() {
     const now = Date.now();
-    const expiredSnap = await db.collection('parking_sessions')
+    const expiredSnap = await db.collection(COLLECTIONS.PARKING_SESSIONS)
         .where('status', '==', 'active')
         .get();
 
@@ -261,7 +145,7 @@ async function markExpiredSessions() {
 
     for (const doc of expiredSnap.docs) {
         const s = doc.data();
-        const endMs = s.end_time.toMillis ? s.end_time.toMillis() : s.end_time;
+        const endMs = SU.toMillis(s.end_time);
         if (now > endMs) {
             batch.update(doc.ref, {
                 status: 'completed',
@@ -282,7 +166,7 @@ async function markExpiredSessions() {
 // ---- 3. Write compliance snapshot ----
 async function writeComplianceSnapshot() {
     const now = Date.now();
-    const activeSnap = await db.collection('parking_sessions')
+    const activeSnap = await db.collection(COLLECTIONS.PARKING_SESSIONS)
         .where('status', '==', 'active')
         .get();
 
@@ -291,8 +175,8 @@ async function writeComplianceSnapshot() {
 
     for (const doc of activeSnap.docs) {
         const s = doc.data();
-        const startMs = s.start_time.toMillis ? s.start_time.toMillis() : s.start_time;
-        const endMs = s.end_time.toMillis ? s.end_time.toMillis() : s.end_time;
+        const startMs = SU.toMillis(s.start_time);
+        const endMs = SU.toMillis(s.end_time);
         if (now < startMs || now > endMs) continue;
 
         if (s.zone_id) {
@@ -306,9 +190,9 @@ async function writeComplianceSnapshot() {
     for (const zone of ZONES) {
         const active = activeByZone[zone.id] || 0;
         const rate = Math.min(100, (active / zone.totalLots) * 100);
-        const color = rate >= 80 ? 'green' : rate >= 50 ? 'orange' : 'red';
+        const color = rate >= CFG.COMPLIANCE_THRESHOLDS.HIGH ? 'green' : rate >= CFG.COMPLIANCE_THRESHOLDS.MEDIUM ? 'orange' : 'red';
 
-        const ref = db.collection('compliance_snapshots').doc();
+        const ref = db.collection(COLLECTIONS.COMPLIANCE_SNAPSHOTS).doc();
         batch.set(ref, {
             zone_id: zone.id,
             zone_name: zone.name,
@@ -352,29 +236,21 @@ async function snapshotTick() {
 }
 
 // ---- 4. Populate missing sessions on startup ----
-// Target active sessions per zone (same ratios as the seed script)
-const ZONE_TARGETS = {
-    'zone_ss15_4':      35,  // 70% of 50  = Orange
-    'zone_ss15_8':      38,  // 95% of 40  = Green
-    'zone_usj10_taipan':45,  // 37.5% of 120= Red
-    'zone_ss16_1':      60,  // 80% of 75  = Green
-    'zone_ss17_1e':     24,  // 60% of 40  = Orange
-    'zone_ss17_1b':      5,  // 17% of 30  = Red
-};
+const ZONE_TARGETS = SP_CONFIG.ZONE_ACTIVE_TARGETS;
 
 async function populateMissingSessions() {
     if (ZONES.length === 0) await loadZones();
 
     const now = Date.now();
-    const activeSnap = await db.collection('parking_sessions')
+    const activeSnap = await db.collection(COLLECTIONS.PARKING_SESSIONS)
         .where('status', '==', 'active')
         .get();
 
     const activeByZone = {};
     for (const doc of activeSnap.docs) {
         const s = doc.data();
-        const endMs = s.end_time.toMillis ? s.end_time.toMillis() : s.end_time;
-        if (now > endMs) continue; // skip truly expired (shouldn't happen, but safety)
+        const endMs = SU.toMillis(s.end_time);
+        if (now > endMs) continue;
         if (s.zone_id) {
             activeByZone[s.zone_id] = (activeByZone[s.zone_id] || 0) + 1;
         }
@@ -394,30 +270,29 @@ async function populateMissingSessions() {
         console.log(`[Populate] Zone ${zone.name}: ${current}/${target} active, creating ${deficit} sessions`);
 
         for (let i = 0; i < deficit; i++) {
-            const startOffset = -Math.floor(seededRandom() * 30); // Started 0-30 min ago
-            let duration = 30 + Math.floor(seededRandom() * 90); // 30-120 min
+            const startOffset = -Math.floor(SU.seededRandom() * 30);
+            let duration = DUR_MIN + Math.floor(SU.seededRandom() * (DUR_MAX - DUR_MIN));
             let startMs = tsOffset(startOffset).toMillis();
             let endMs = startMs + duration * 60 * 1000;
 
-            // Clamp to operating hours
-            const clamped = clampToOperatingHours(startMs, endMs);
+            const clamped = SU.clampToOperatingHours(startMs, endMs);
             startMs = clamped.startMs;
             endMs = clamped.endMs;
             duration = Math.round((endMs - startMs) / 60000);
 
             const startTs = Timestamp.fromMillis(startMs);
             const endTs = Timestamp.fromMillis(endMs);
-            const status = computeStatus(startMs, endMs);
+            const status = SU.computeStatus(startMs, endMs);
 
-            // 10% chance: outside-zone payer (paid but not inside any geofence)
-            const isOutside = seededRandom() < 0.10;
-            const loc = isOutside ? outsideLocationForZone(zone) : locationForZone(zone);
+            const isOutside = SU.seededRandom() < OUTSIDE_PROB;
+            const loc = isOutside ? SU.outsideLocationForZone(zone) : SU.locationForZone(zone);
             const zoneId = isOutside ? null : zone.id;
             const isCompliant = isOutside ? false : (status === 'active');
+            const vehicleId = SU.randomVehicleId();
 
-            const extRef = db.collection('external_payment_sessions').doc();
+            const extRef = db.collection(COLLECTIONS.EXTERNAL_PAYMENT_SESSIONS).doc();
             batch.set(extRef, {
-                vehicle_id: randomVehicleId(),
+                vehicle_id: vehicleId,
                 lat: loc.lat,
                 lng: loc.lng,
                 start_time: startTs,
@@ -429,10 +304,10 @@ async function populateMissingSessions() {
                 updated_at: tsNow(),
             });
 
-            const psRef = db.collection('parking_sessions').doc();
+            const psRef = db.collection(COLLECTIONS.PARKING_SESSIONS).doc();
             batch.set(psRef, {
                 external_session_id: extRef.id,
-                vehicle_id: randomVehicleId(),
+                vehicle_id: vehicleId,
                 lat: loc.lat,
                 lng: loc.lng,
                 zone_id: zoneId,

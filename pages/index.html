@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">
     <meta name="description" content="SmartPark 2.0 — GPS/Geofencing Parking Compliance System">
     <title>SmartPark 2.0</title>
@@ -18,6 +18,8 @@
             height: 100%;
             height: 100dvh; /* dynamic viewport for mobile chrome */
             overflow: hidden;
+            /* iOS safe area: prevent content from hiding behind notch / URL bar */
+            padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
         }
 
         .app-shell {
@@ -220,8 +222,7 @@
             align-items: center;
             padding: 0 24px;
             gap: 12px;
-            position: sticky;
-            top: 0;
+            position: relative; /* was sticky — not needed in flex column, caused mobile URL-bar overlap */
             z-index: 50;
             flex-shrink: 0;
         }
@@ -358,6 +359,14 @@
 
             .topbar {
                 padding: 0 16px;
+                /* Prevent topbar from hiding behind mobile browser chrome */
+                padding-top: env(safe-area-inset-top, 0);
+            }
+
+            /* Re-calculate on viewport resize (zoom, URL bar show/hide) */
+            .app-shell {
+                height: 100vh;
+                height: 100dvh;
             }
         }
     </style>
@@ -463,10 +472,14 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="../src/config.js"></script>
+    <script src="../src/zones-config.js"></script>
+    <script src="../src/session-utils.js"></script>
     <script src="../src/geofencing-utils.js?v=2"></script>
     <script src="../src/compliance-utils.js"></script>
     <script src="../src/dummy-data.js"></script>
     <script src="../src/app.js"></script>
+    <script src="../src/ui-helpers.js"></script>
 
     <script>
         const PAGES = {
@@ -566,6 +579,20 @@
             document.getElementById('offlineIndicator').classList.add('show');
             showShellNotification('Offline mode — data will sync when online', 'warning');
         });
+
+        // Mobile viewport fix: force app-shell height when URL bar shows/hides
+        (function fixMobileViewport() {
+            function setVh() {
+                const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+                document.querySelector('.app-shell').style.height = vh + 'px';
+            }
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', setVh);
+            } else {
+                window.addEventListener('resize', setVh);
+            }
+            setVh();
+        })();
 
         function showShellNotification(msg, type = 'info') {
             const cls = { info: 'bg-primary', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' }[type];

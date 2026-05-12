@@ -423,10 +423,14 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="../src/config.js"></script>
+    <script src="../src/zones-config.js"></script>
+    <script src="../src/session-utils.js"></script>
     <script src="../src/geofencing-utils.js?v=2"></script>
     <script src="../src/compliance-utils.js"></script>
     <script src="../src/dummy-data.js"></script>
     <script src="../src/app.js"></script>
+    <script src="../src/ui-helpers.js"></script>
     <script>
         // ---- Data ----
         // Zones will be loaded from Firebase (window.ZONES)
@@ -460,12 +464,7 @@
         const initTheme = document.documentElement.getAttribute('data-theme') || 'light';
         applyTile(initTheme);
 
-        // ---- Status helper ----
-        function getComplianceStyle(complianceRate) {
-            if (complianceRate >= 80) return { color: 'var(--accent-success)', hex: '#10b981', text: 'High' };
-            if (complianceRate >= 50) return { color: 'var(--accent-warning)', hex: '#f59e0b', text: 'Medium' };
-            return { color: 'var(--accent-danger)', hex: '#ef4444', text: 'Low' };
-        }
+        // getComplianceStyle is now a global from ui-helpers.js
 
         // ---- Render zones ----
         let zoneMarkers = [];
@@ -495,13 +494,7 @@
             return { dLat, dLng };
         }
 
-        // Resolve a session's effective zone via geofence containment (GPS is source of truth).
-        function resolveSessionZone(session, zones) {
-            if (session.lat != null && session.lng != null) {
-                return findZoneContainingLocation({ lat: session.lat, lng: session.lng }, zones);
-            }
-            return null;
-        }
+        // resolveSessionZone is now a global from ui-helpers.js
 
         function renderPayers() {
             payerLayer.clearLayers();
@@ -510,7 +503,7 @@
 
             const now = Date.now();
             sessions
-                .filter(s => s.status === 'active' && now >= s.start_time && now <= s.end_time)
+                .filter(s => isSessionActiveNow(s, now))
                 .forEach(session => {
                 const remainingMs = session.end_time - Date.now();
                 const remainingMin = Math.max(0, Math.round(remainingMs / 60000));
@@ -618,18 +611,9 @@
             totalSessions = 0;
             totalCompliance = 0;
 
-            // Bucket each truly-active session (paid + within time window) into its
-            // containing zone by GPS, not by stored zoneId.
+            // Single bucketing pass via UIHelpers
             const now = Date.now();
-            const activeByZone = {};
-            let activeOutside = 0;
-            sessions.forEach(s => {
-                if (s.status !== 'active') return;
-                if (now < s.start_time || now > s.end_time) return;
-                const z = resolveSessionZone(s, zones);
-                if (z) activeByZone[z.id] = (activeByZone[z.id] || 0) + 1;
-                else activeOutside++;
-            });
+            const { activeByZone, outsideCount: activeOutside } = bucketActiveByZone(sessions, zones, now);
 
             zones.forEach(zone => {
                 const activeInZone = activeByZone[zone.id] || 0;
@@ -735,20 +719,7 @@
         }
 
         // Initial render
-        // Only load dummy data if USE_DUMMY_DATA is true (from app.js)
-        // Otherwise wait for Firebase data from app.js
-        if (typeof USE_DUMMY_DATA !== 'undefined' && USE_DUMMY_DATA) {
-            if (typeof DUMMY_ZONES !== 'undefined') {
-                window.ZONES = DUMMY_ZONES;
-                console.log('[Map] Loaded dummy zones:', window.ZONES.length);
-            }
-            if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
-                window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
-                console.log('[Map] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
-            }
-        } else {
-            console.log('[Map] Waiting for Firebase data (USE_DUMMY_DATA = false)');
-        }
+        UIHelpers.bootstrapDummyData('Map');
         setTimeout(renderZones, 1000);
 
         // Update zones when data changes

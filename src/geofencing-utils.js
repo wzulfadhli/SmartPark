@@ -91,23 +91,38 @@ function isWithinGeofence(coords, zone) {
 }
 
 /**
- * Check if a coordinate is within any of the defined zones
+ * Check if a coordinate is within any of the defined zones.
+ * When multiple zones overlap, the zone whose center is nearest
+ * to the coordinate wins (nearest-center-wins strategy).
  * @param {Object} coords - Coordinate to check {lat, lng}
  * @param {Array} zones - Array of zone definitions
- * @returns {Object|null} The zone object if within any zone, null otherwise
+ * @returns {Object|null} The best-matching zone, or null
  */
 function findZoneForCoords(coords, zones) {
     if (!coords || !zones || !Array.isArray(zones)) {
         return null;
     }
 
+    let bestZone = null;
+    let bestDist = Infinity;
+
     for (const zone of zones) {
         if (isWithinGeofence(coords, zone)) {
-            return zone;
+            // For line zones use the center fallback; for circle zones use center directly
+            const center = zone.center || (zone.line && zone.line.length >= 2
+                ? { lat: (zone.line[0].lat + zone.line[zone.line.length - 1].lat) / 2,
+                    lng: (zone.line[0].lng + zone.line[zone.line.length - 1].lng) / 2 }
+                : null);
+            if (!center) { return zone; } // no center to compare — return immediately
+            const dist = calculateDistance(coords, center);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestZone = zone;
+            }
         }
     }
 
-    return null;
+    return bestZone;
 }
 
 /**
@@ -149,56 +164,14 @@ function validateCoords(coords) {
     );
 }
 
-// ============================================================
-// SAMPLE ZONE DEFINITIONS
-// ============================================================
-// These are example geofenced parking zones. In production,
-// these would be loaded from Firestore or a configuration file.
-// ============================================================
-
-const SAMPLE_ZONES = [
-    {
-        id: 'zone_ss15_4',
-        name: 'Jalan SS15/4',
-        center: { lat: 3.0765, lng: 101.5890 },
-        radius: 150, // meters
-        totalLots: 50,
-        createdAt: new Date().toISOString()
-    },
-    {
-        id: 'zone_ss15_8',
-        name: 'Jalan SS15/8',
-        center: { lat: 3.0750, lng: 101.5895 },
-        radius: 120,
-        totalLots: 40,
-        createdAt: new Date().toISOString()
-    },
-    {
-        id: 'zone_usj10_taipan',
-        name: 'USJ 10 Taipan',
-        center: { lat: 3.0485, lng: 101.5850 },
-        radius: 200,
-        totalLots: 120,
-        createdAt: new Date().toISOString()
-    },
-    {
-        id: 'zone_ss16_1',
-        name: 'Jalan SS16/1',
-        center: { lat: 3.0820, lng: 101.5865 },
-        radius: 180,
-        totalLots: 75,
-        createdAt: new Date().toISOString()
-    }
-];
-
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         calculateDistance,
+        isWithinLineBoundingRect,
         isWithinGeofence,
         findZoneForCoords,
         validateZone,
-        validateCoords,
-        SAMPLE_ZONES
+        validateCoords
     };
 }

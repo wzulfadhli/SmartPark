@@ -403,10 +403,14 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="../src/config.js"></script>
+    <script src="../src/zones-config.js"></script>
+    <script src="../src/session-utils.js"></script>
     <script src="../src/geofencing-utils.js?v=2"></script>
     <script src="../src/compliance-utils.js"></script>
     <script src="../src/dummy-data.js"></script>
     <script src="../src/app.js"></script>
+    <script src="../src/ui-helpers.js"></script>
 
     <script>
         // ============================================================
@@ -416,40 +420,8 @@
         // zone compliance tracking based on active payment sessions.
         // ============================================================
 
-        // ---- Shared helpers (consistent with monitor.html and map.html) ----
-        // Convert Firestore Timestamp / plain ms / Date to milliseconds
-        function toMillis(ts) {
-            if (ts && typeof ts === 'object') {
-                if (typeof ts.toMillis === 'function') return ts.toMillis();
-                if (ts._seconds !== undefined) return ts._seconds * 1000;
-                if (ts.seconds !== undefined) return ts.seconds * 1000;
-            }
-            return ts;
-        }
-
-        // True if a session is paid AND currently within its time window.
-        function isSessionActiveNow(s, now) {
-            return s.status === 'active' && now >= s.start_time && now <= s.end_time;
-        }
-        // Returns the zone that GPS-contains the session.
-        function resolveSessionZone(session, zones) {
-            if (session.lat != null && session.lng != null) {
-                return findZoneForCoords({ lat: session.lat, lng: session.lng }, zones);
-            }
-            return null;
-        }
-        // Build { zoneId -> activeCount } and return total truly-active count.
-        function bucketActiveByZone(sessions, zones, now) {
-            const map = {};
-            let total = 0;
-            sessions.forEach(s => {
-                if (!isSessionActiveNow(s, now)) return;
-                total++;
-                const z = resolveSessionZone(s, zones);
-                if (z) map[z.id] = (map[z.id] || 0) + 1;
-            });
-            return { activeByZone: map, totalActive: total };
-        }
+        // Shared helpers: toMillis, isSessionActiveNow, resolveSessionZone,
+        // bucketActiveByZone, getStatusColorHex are provided as globals by ui-helpers.js.
 
         // Chart instances
         let donutChart, sessionBarChart;
@@ -537,9 +509,7 @@
             zones.forEach(zone => {
                 const activeInZone = activeByZone[zone.id] || 0;
                 const complianceRate = (activeInZone / zone.totalLots) * 100;
-                let statusColor = 'green';
-                if (complianceRate < 50) statusColor = 'red';
-                else if (complianceRate < 80) statusColor = 'orange';
+                const statusColor = UIHelpers.complianceStatusColor(complianceRate);
 
                 html += `
                     <div class="col-6 col-md-3 mb-3">
@@ -571,14 +541,7 @@
                 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        function getStatusColorHex(statusColor) {
-            const colors = {
-                green: '#10b981',
-                orange: '#f59e0b',
-                red: '#ef4444'
-            };
-            return colors[statusColor] || '#6b7280';
-        }
+        // getStatusColorHex is now a global from ui-helpers.js
 
         // ---- Payment session history table ----
         function renderSessionHistory() {
@@ -586,35 +549,17 @@
             const sessions = window.PAYMENT_SESSIONS || [];
             const zones = window.ZONES || [];
 
-            // Populate zone filter dropdown
+            // Populate zone filter dropdown via UIHelpers
             const zoneFilter = document.getElementById('filterHistoryZone');
-            const currentZoneVal = zoneFilter.value;
-            zoneFilter.innerHTML = '<option value="">All Zones</option><option value="outside">Outside Zone</option>';
-            zones.forEach(z => {
-                zoneFilter.innerHTML += `<option value="${z.id}">${z.name}</option>`;
-            });
-            if (currentZoneVal) zoneFilter.value = currentZoneVal;
+            UIHelpers.populateZoneFilter(zoneFilter, zones, true);
 
-            // Apply filters
-            const statusVal = document.getElementById('filterHistoryStatus').value;
-            const dateVal = document.getElementById('filterHistoryDate').value;
-            const searchVal = document.getElementById('filterHistorySearch').value.trim().toLowerCase();
-            const filtered = sessions.filter(s => {
-                const containingZone = resolveSessionZone(s, zones);
-                if (zoneFilter.value === 'outside') {
-                    if (containingZone) return false;
-                } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
-                if (statusVal && s.status !== statusVal) return false;
-                if (dateVal) {
-                    const d = new Date(toMillis(s.start_time));
-                    const sessionDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                    if (sessionDate !== dateVal) return false;
-                }
-                if (searchVal) {
-                    const hay = ((s.id || '') + ' ' + (s.vehicle_id || '')).toLowerCase();
-                    if (!hay.includes(searchVal)) return false;
-                }
-                return true;
+            // Apply filters via UIHelpers
+            const filtered = UIHelpers.filterSessions(sessions, {
+                zones: zones,
+                zoneFilterValue: zoneFilter.value,
+                statusFilterValue: document.getElementById('filterHistoryStatus').value,
+                dateFilterValue: document.getElementById('filterHistoryDate').value,
+                searchValue: document.getElementById('filterHistorySearch').value
             });
 
             document.getElementById('sessionHistoryCount').textContent =
@@ -628,16 +573,10 @@
             }
             const sorted = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             tbody.innerHTML = sorted.map(s => {
-                const dateStr = new Date(toMillis(s.start_time)).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-                const timeIn = new Date(toMillis(s.start_time)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const timeOut = new Date(toMillis(s.end_time)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const badge = s.status === 'active'
-                    ? '<span class="badge bg-primary">Active</span>'
-                    : s.status === 'upcoming'
-                    ? '<span class="badge bg-secondary">Upcoming</span>'
-                    : s.status === 'completed'
-                    ? '<span class="badge bg-success">Completed</span>'
-                    : '<span class="badge bg-warning">Cancelled</span>';
+                const dateStr = UIHelpers.formatDate(s.start_time);
+                const timeIn  = UIHelpers.formatTime(s.start_time);
+                const timeOut = UIHelpers.formatTime(s.end_time);
+                const badge   = UIHelpers.statusBadgeHtml(s.status);
                 return `<tr class="session-row">
                     <td class="fw-bold small">${s.id.substr(0, 12)}...</td>
                     <td class="text-muted">${dateStr}</td>
@@ -673,16 +612,9 @@
             let complianceStatus = 'No data';
             let complianceStatusColor = '#6b7280';
             if (zones.length > 0) {
-                if (avgCompliance >= 80) {
-                    complianceStatus = 'High';
-                    complianceStatusColor = '#10b981';
-                } else if (avgCompliance >= 50) {
-                    complianceStatus = 'Medium';
-                    complianceStatusColor = '#f59e0b';
-                } else {
-                    complianceStatus = 'Low';
-                    complianceStatusColor = '#ef4444';
-                }
+                const cStyle = UIHelpers.getComplianceStyle(avgCompliance);
+                complianceStatus = cStyle.text;
+                complianceStatusColor = cStyle.hex;
             }
 
             // Calculate average session duration
@@ -706,8 +638,9 @@
             let greenZones = 0, orangeZones = 0, redZones = 0;
             zones.forEach(z => {
                 const rate = ((activeByZone[z.id] || 0) / z.totalLots) * 100;
-                if (rate >= 80) greenZones++;
-                else if (rate >= 50) orangeZones++;
+                const c = UIHelpers.complianceStatusColor(rate);
+                if (c === 'green') greenZones++;
+                else if (c === 'orange') orangeZones++;
                 else redZones++;
             });
 
@@ -761,9 +694,7 @@
             zones.forEach(zone => {
                 const activeInZone = activeByZone[zone.id] || 0;
                 const complianceRate = (activeInZone / zone.totalLots) * 100;
-                let statusColor = 'green';
-                if (complianceRate < 50) statusColor = 'red';
-                else if (complianceRate < 80) statusColor = 'orange';
+                const statusColor = UIHelpers.complianceStatusColor(complianceRate);
 
                 const statusEmoji = statusColor === 'green' ? '🟢' : statusColor === 'orange' ? '🟠' : '🔴';
 
@@ -785,20 +716,7 @@
         $(document).ready(() => {
             console.log('[Dashboard] Booting...');
 
-            // Only load dummy data if USE_DUMMY_DATA is true (from app.js)
-            // Otherwise wait for Firebase data from app.js
-            if (typeof USE_DUMMY_DATA !== 'undefined' && USE_DUMMY_DATA) {
-                if (typeof DUMMY_ZONES !== 'undefined') {
-                    window.ZONES = DUMMY_ZONES;
-                    console.log('[Dashboard] Loaded dummy zones:', window.ZONES.length);
-                }
-                if (typeof DUMMY_PAYMENT_SESSIONS !== 'undefined') {
-                    window.PAYMENT_SESSIONS = DUMMY_PAYMENT_SESSIONS;
-                    console.log('[Dashboard] Loaded dummy payment sessions:', window.PAYMENT_SESSIONS.length);
-                }
-            } else {
-                console.log('[Dashboard] Waiting for Firebase data (USE_DUMMY_DATA = false)');
-            }
+            UIHelpers.bootstrapDummyData('Dashboard');
 
             console.log('[Dashboard] window.ZONES:', window.ZONES);
             console.log('[Dashboard] window.PAYMENT_SESSIONS:', window.PAYMENT_SESSIONS);

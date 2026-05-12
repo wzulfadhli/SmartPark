@@ -6,37 +6,18 @@
 // determined by active payment sessions within geofenced zones.
 // ============================================================
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = (typeof SP_CONFIG !== 'undefined') ? SP_CONFIG.APP_VERSION : '2.1.0';
 const DB_NAME = 'SmartParkingDB_GPS';
 
 // ============================================================
 // DUMMY DATA MODE (for testing without Firebase)
 // ============================================================
-const USE_DUMMY_DATA = true; // Set to false to use real Firebase data
+const USE_DUMMY_DATA = (typeof SP_CONFIG !== 'undefined') ? SP_CONFIG.USE_DUMMY_DATA : true;
 
-// Load Firebase configuration from separate file
-// In production, this would be loaded from environment variables
-let FIREBASE_CONFIG;
-try {
-    FIREBASE_CONFIG = {
-        apiKey:            "AIzaSyDEyDj-bW8rRgaivvfNPVub8AfWMDpbWdY",
-        authDomain:        "gpark-9eed8.firebaseapp.com",
-        projectId:         "gpark-9eed8",
-        storageBucket:     "gpark-9eed8.firebasestorage.app",
-        messagingSenderId: "517710435374",
-        appId:             "1:517710435374:web:7ca16215d5ab4422243bbf"
-    };
-} catch (e) {
-    console.warn('[Config] Using default Firebase config - please update with your credentials');
-    FIREBASE_CONFIG = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "your-project.firebaseapp.com",
-        projectId: "your-project-id",
-        storageBucket: "your-project.appspot.com",
-        messagingSenderId: "123456789",
-        appId: "1:123456789:web:abcdef123456"
-    };
-}
+// Firebase config — read from centralized SP_CONFIG (config.js)
+const FIREBASE_CONFIG = (typeof SP_CONFIG !== 'undefined' && SP_CONFIG.FIREBASE)
+    ? SP_CONFIG.FIREBASE
+    : { apiKey: '', authDomain: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: '' };
 
 // Firebase Firestore references (set after init)
 let firebaseDB = null;
