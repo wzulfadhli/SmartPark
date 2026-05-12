@@ -12,7 +12,7 @@ const DB_NAME = 'SmartParkingDB_GPS';
 // ============================================================
 // DUMMY DATA MODE (for testing without Firebase)
 // ============================================================
-const USE_DUMMY_DATA = false; // Set to false to use real Firebase data
+const USE_DUMMY_DATA = true; // Set to false to use real Firebase data
 
 // Load Firebase configuration from separate file
 // In production, this would be loaded from environment variables
