@@ -38,6 +38,28 @@ const seedStartMs = Date.now();
 function tsNow() { return Timestamp.fromMillis(Date.now()); }
 function tsOffset(offsetMinutes) { return Timestamp.fromMillis(Date.now() + offsetMinutes * 60 * 1000); }
 
+// ---- Operating hours helpers ----
+// Parking operation: 8:00 AM - 6:00 PM
+const OP_START_HOUR = 8;
+const OP_END_HOUR = 18;
+
+function getTodayAtHour(hour) {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.getTime();
+}
+
+function clampToOperatingHours(startMs, endMs) {
+    const opStart = getTodayAtHour(OP_START_HOUR);
+    const opEnd = getTodayAtHour(OP_END_HOUR);
+    if (startMs < opStart) startMs = opStart;
+    if (endMs > opEnd) endMs = opEnd;
+    if (startMs >= endMs) {
+        endMs = startMs + 5 * 60 * 1000;
+    }
+    return { startMs, endMs };
+}
+
 // Compute real session status based on current time vs session window
 function computeStatus(startMs, endMs) {
     const nowMs = Date.now();
@@ -243,13 +265,20 @@ async function seedExternalSessions() {
         const zone = ZONES.find(z => z.id === spec.zoneId);
         for (let i = 0; i < spec.count; i++) {
             const startOffset = spec.startRange[0] + seededRandom() * (spec.startRange[1] - spec.startRange[0]);
-            const duration = spec.durationRange[0] + Math.round(seededRandom() * (spec.durationRange[1] - spec.durationRange[0]));
+            let duration = spec.durationRange[0] + Math.round(seededRandom() * (spec.durationRange[1] - spec.durationRange[0]));
             const location = locationForZone(zone);
             const extId = `ext_${zone.id}_${count + 1}`;
 
-            const startTs = tsOffset(startOffset);
-            const endTs   = tsOffset(startOffset + duration);
-            const realStatus = computeStatus(startTs.toMillis(), endTs.toMillis());
+            let startMs = tsOffset(startOffset).toMillis();
+            let endMs = startMs + duration * 60 * 1000;
+            const clamped = clampToOperatingHours(startMs, endMs);
+            startMs = clamped.startMs;
+            endMs = clamped.endMs;
+            duration = Math.round((endMs - startMs) / 60000);
+
+            const startTs = Timestamp.fromMillis(startMs);
+            const endTs   = Timestamp.fromMillis(endMs);
+            const realStatus = computeStatus(startMs, endMs);
             await db.collection('external_payment_sessions').doc(extId).set({
                 vehicle_id:       randomVehicleId(count + 1),
                 lat:              location.lat,
@@ -269,16 +298,22 @@ async function seedExternalSessions() {
     // Outside-zone sessions
     for (const o of OUTSIDE_SPECS) {
         const extId = `ext_outside_${o.vehicleId}`;
-        const outStartTs = tsOffset(o.start);
-        const outEndTs   = tsOffset(o.start + o.duration);
-        const outRealStatus = computeStatus(outStartTs.toMillis(), outEndTs.toMillis());
+        let outStartMs = tsOffset(o.start).toMillis();
+        let outEndMs = outStartMs + o.duration * 60 * 1000;
+        const outClamped = clampToOperatingHours(outStartMs, outEndMs);
+        outStartMs = outClamped.startMs;
+        outEndMs = outClamped.endMs;
+        const outDuration = Math.round((outEndMs - outStartMs) / 60000);
+        const outStartTs = Timestamp.fromMillis(outStartMs);
+        const outEndTs   = Timestamp.fromMillis(outEndMs);
+        const outRealStatus = computeStatus(outStartMs, outEndMs);
         await db.collection('external_payment_sessions').doc(extId).set({
             vehicle_id:       o.vehicleId,
             lat:              o.lat,
             lng:              o.lng,
             start_time:       outStartTs,
             end_time:         outEndTs,
-            duration_minutes: o.duration,
+            duration_minutes: outDuration,
             status:           outRealStatus,
             raw_payload:      { source: 'demo-seed', zone_hint: null },
             received_at:      tsNow(),

@@ -199,6 +199,7 @@
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
                     </select>
+                    <input type="date" id="filterDate" title="Filter by date">
                     <input type="text" id="filterSearch" placeholder="Search vehicle or session...">
                     <span class="filter-count" id="filterCount"></span>
                 </div>
@@ -208,6 +209,7 @@
                             <thead>
                                 <tr>
                                     <th>Session ID</th>
+                                    <th>Date</th>
                                     <th>Zone</th>
                                     <th>Vehicle</th>
                                     <th>Start Time</th>
@@ -217,7 +219,7 @@
                             </thead>
                             <tbody id="activeSessionsTable">
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">No active sessions</td>
+                                    <td colspan="7" class="text-center text-muted py-4">No active sessions</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -246,6 +248,16 @@
 
     <script>
         // COMPLIANCE_THRESHOLDS is provided as a global by app.js (already loaded above).
+
+        // Convert Firestore Timestamp / plain ms / Date to milliseconds
+        function toMillis(ts) {
+            if (ts && typeof ts === 'object') {
+                if (typeof ts.toMillis === 'function') return ts.toMillis();
+                if (ts._seconds !== undefined) return ts._seconds * 1000;
+                if (ts.seconds !== undefined) return ts.seconds * 1000;
+            }
+            return ts;
+        }
 
         // True if session is paid AND currently within its time window
         function isSessionActiveNow(s, now) {
@@ -301,6 +313,7 @@
 
             // Apply filters
             const statusVal = document.getElementById('filterStatus').value;
+            const dateVal = document.getElementById('filterDate').value;
             const searchVal = document.getElementById('filterSearch').value.trim().toLowerCase();
             const filtered = trulyActive.filter(s => {
                 const containingZone = resolveSessionZone(s, zones);
@@ -308,6 +321,11 @@
                     if (containingZone) return false;
                 } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
                 if (statusVal && s.status !== statusVal) return false;
+                if (dateVal) {
+                    const d = new Date(toMillis(s.start_time));
+                    const sessionDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    if (sessionDate !== dateVal) return false;
+                }
                 if (searchVal) {
                     const hay = ((s.id || '') + ' ' + (s.vehicle_id || '')).toLowerCase();
                     if (!hay.includes(searchVal)) return false;
@@ -321,16 +339,18 @@
             try {
                 const tbody = document.getElementById('activeSessionsTable');
                 if (filtered.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No active sessions</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No active sessions</td></tr>';
                 } else {
                     tbody.innerHTML = filtered.map(s => {
-                        const startTime = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const dateStr = new Date(toMillis(s.start_time)).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+                        const startTime = new Date(toMillis(s.start_time)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const containingZone = resolveSessionZone(s, zones);
                         const zoneLabel = containingZone ? containingZone.name : '<span class="text-danger">Outside</span>';
                         const badge = '<span class="badge bg-success">Active</span>';
                         const sid = (s.id || '').toString();
                         return `<tr>
                             <td class="small">${sid.substring(0, 12)}...</td>
+                            <td class="text-muted">${dateStr}</td>
                             <td>${zoneLabel}</td>
                             <td>${s.vehicle_id || 'N/A'}</td>
                             <td>${startTime}</td>
@@ -342,7 +362,7 @@
             } catch (err) {
                 console.error('[Monitor] Failed to render active sessions table:', err);
                 document.getElementById('activeSessionsTable').innerHTML =
-                    `<tr><td colspan="6" class="text-danger py-4">Render error: ${err.message}</td></tr>`;
+                    `<tr><td colspan="7" class="text-danger py-4">Render error: ${err.message}</td></tr>`;
             }
 
             // Zones grid
@@ -409,6 +429,7 @@
         // Filter listeners
         document.getElementById('filterZone').addEventListener('change', updateMonitor);
         document.getElementById('filterStatus').addEventListener('change', updateMonitor);
+        document.getElementById('filterDate').addEventListener('change', updateMonitor);
         document.getElementById('filterSearch').addEventListener('input', updateMonitor);
 
         setTimeout(updateMonitor, 1000);

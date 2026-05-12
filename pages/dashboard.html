@@ -370,6 +370,7 @@
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
             </select>
+            <input type="date" id="filterHistoryDate" title="Filter by date">
             <input type="text" id="filterHistorySearch" placeholder="Search vehicle or session...">
             <span class="filter-count" id="filterHistoryCount"></span>
         </div>
@@ -379,6 +380,7 @@
                     <thead>
                         <tr>
                             <th>Session ID</th>
+                            <th>Date</th>
                             <th>Zone</th>
                             <th>Vehicle</th>
                             <th>Time Range</th>
@@ -388,7 +390,7 @@
                     </thead>
                     <tbody id="sessionHistoryTable">
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">No payment sessions yet</td>
+                            <td colspan="7" class="text-center text-muted py-4">No payment sessions yet</td>
                         </tr>
                     </tbody>
                 </table>
@@ -415,6 +417,16 @@
         // ============================================================
 
         // ---- Shared helpers (consistent with monitor.html and map.html) ----
+        // Convert Firestore Timestamp / plain ms / Date to milliseconds
+        function toMillis(ts) {
+            if (ts && typeof ts === 'object') {
+                if (typeof ts.toMillis === 'function') return ts.toMillis();
+                if (ts._seconds !== undefined) return ts._seconds * 1000;
+                if (ts.seconds !== undefined) return ts.seconds * 1000;
+            }
+            return ts;
+        }
+
         // True if a session is paid AND currently within its time window.
         function isSessionActiveNow(s, now) {
             return s.status === 'active' && now >= s.start_time && now <= s.end_time;
@@ -585,6 +597,7 @@
 
             // Apply filters
             const statusVal = document.getElementById('filterHistoryStatus').value;
+            const dateVal = document.getElementById('filterHistoryDate').value;
             const searchVal = document.getElementById('filterHistorySearch').value.trim().toLowerCase();
             const filtered = sessions.filter(s => {
                 const containingZone = resolveSessionZone(s, zones);
@@ -592,6 +605,11 @@
                     if (containingZone) return false;
                 } else if (zoneFilter.value && (!containingZone || containingZone.id !== zoneFilter.value)) return false;
                 if (statusVal && s.status !== statusVal) return false;
+                if (dateVal) {
+                    const d = new Date(toMillis(s.start_time));
+                    const sessionDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    if (sessionDate !== dateVal) return false;
+                }
                 if (searchVal) {
                     const hay = ((s.id || '') + ' ' + (s.vehicle_id || '')).toLowerCase();
                     if (!hay.includes(searchVal)) return false;
@@ -605,13 +623,14 @@
                 filtered.length === sessions.length ? '' : `${filtered.length} of ${sessions.length}`;
 
             if (!filtered.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No payment sessions yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No payment sessions yet</td></tr>';
                 return;
             }
             const sorted = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             tbody.innerHTML = sorted.map(s => {
-                const timeIn = new Date(s.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const timeOut = new Date(s.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const dateStr = new Date(toMillis(s.start_time)).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+                const timeIn = new Date(toMillis(s.start_time)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const timeOut = new Date(toMillis(s.end_time)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const badge = s.status === 'active'
                     ? '<span class="badge bg-primary">Active</span>'
                     : s.status === 'upcoming'
@@ -621,6 +640,7 @@
                     : '<span class="badge bg-warning">Cancelled</span>';
                 return `<tr class="session-row">
                     <td class="fw-bold small">${s.id.substr(0, 12)}...</td>
+                    <td class="text-muted">${dateStr}</td>
                     <td class="text-muted">${(resolveSessionZone(s, zones)?.name) || 'Outside Zone'}</td>
                     <td>${s.vehicle_id || 'N/A'}</td>
                     <td class="text-muted">${timeIn} - ${timeOut}</td>
@@ -786,6 +806,7 @@
             // Filter listeners
             document.getElementById('filterHistoryZone').addEventListener('change', renderSessionHistory);
             document.getElementById('filterHistoryStatus').addEventListener('change', renderSessionHistory);
+            document.getElementById('filterHistoryDate').addEventListener('change', renderSessionHistory);
             document.getElementById('filterHistorySearch').addEventListener('input', renderSessionHistory);
 
             loadHistoricalData();

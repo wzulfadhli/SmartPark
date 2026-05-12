@@ -49,6 +49,28 @@ function randomVehicleId() {
 function tsNow() { return Timestamp.fromMillis(Date.now()); }
 function tsOffset(offsetMinutes) { return Timestamp.fromMillis(Date.now() + offsetMinutes * 60 * 1000); }
 
+// ---- Operating hours helpers ----
+// Parking operation: 8:00 AM - 6:00 PM
+const OP_START_HOUR = 8;
+const OP_END_HOUR = 18;
+
+function getTodayAtHour(hour) {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.getTime();
+}
+
+function clampToOperatingHours(startMs, endMs) {
+    const opStart = getTodayAtHour(OP_START_HOUR);
+    const opEnd = getTodayAtHour(OP_END_HOUR);
+    if (startMs < opStart) startMs = opStart;
+    if (endMs > opEnd) endMs = opEnd;
+    if (startMs >= endMs) {
+        endMs = startMs + 5 * 60 * 1000; // minimum 5-min session
+    }
+    return { startMs, endMs };
+}
+
 function computeStatus(startMs, endMs) {
     const nowMs = Date.now();
     if (nowMs < startMs) return 'upcoming';
@@ -88,6 +110,29 @@ function locationForZone(zone) {
     return { lat: zone.center.lat + dLat, lng: zone.center.lng + dLng };
 }
 
+// Generate a location just outside a zone's geofence (for non-compliant payers)
+function outsideLocationForZone(zone) {
+    if (zone.line && zone.line.length >= 2) {
+        const p1 = zone.line[0], p2 = zone.line[zone.line.length - 1];
+        const midLat = (p1.lat + p2.lat) / 2;
+        const midLng = (p1.lng + p2.lng) / 2;
+        const buf = (zone.bufferMeters || 20);
+        const cosLat = Math.cos(midLat * Math.PI / 180);
+        const beyond = 25 + Math.floor(seededRandom() * 80); // 25-105 m beyond
+        const bearing = seededRandom() * 360;
+        const rad = (bearing * Math.PI) / 180;
+        const dLat = (beyond * Math.cos(rad)) / 111320;
+        const dLng = (beyond * Math.sin(rad)) / (111320 * cosLat);
+        return { lat: midLat + dLat, lng: midLng + dLng };
+    }
+    const radius = zone.radius || 100;
+    const beyond = 20 + Math.floor(seededRandom() * 80); // 20-100 m beyond radius
+    const angle = seededRandom() * 2 * Math.PI;
+    const dLat = (beyond * Math.cos(angle)) / 111320;
+    const dLng = (beyond * Math.sin(angle)) / (111320 * Math.cos(zone.center.lat * Math.PI / 180));
+    return { lat: zone.center.lat + dLat, lng: zone.center.lng + dLng };
+}
+
 function findZoneForCoords(coords, zones) {
     for (const zone of zones) {
         if (zone.line && zone.line.length >= 2) {
@@ -123,6 +168,16 @@ function findZoneForCoords(coords, zones) {
 async function generateNewSessions() {
     if (ZONES.length === 0) await loadZones();
 
+    const nowMs = Date.now();
+    const opStart = getTodayAtHour(OP_START_HOUR);
+    const opEnd = getTodayAtHour(OP_END_HOUR);
+
+    // Only generate during operating hours
+    if (nowMs < opStart || nowMs > opEnd) {
+        console.log(`[Generator] Outside operating hours (${new Date().toLocaleTimeString()}), skipping new session generation`);
+        return;
+    }
+
     // Check current count
     const allSnap = await db.collection('parking_sessions').get();
     if (allSnap.size >= MAX_TOTAL_SESSIONS) {
@@ -136,11 +191,25 @@ async function generateNewSessions() {
     for (let i = 0; i < SESSIONS_PER_BATCH; i++) {
         const zone = ZONES[Math.floor(seededRandom() * ZONES.length)];
         const startOffset = Math.floor(seededRandom() * 3) - 1; // -1 to +2 min from now
-        const duration = 30 + Math.floor(seededRandom() * 90); // 30-120 min
-        const startTs = tsOffset(startOffset);
-        const endTs = tsOffset(startOffset + duration);
-        const loc = locationForZone(zone);
-        const status = computeStatus(startTs.toMillis(), endTs.toMillis());
+        let duration = 30 + Math.floor(seededRandom() * 90); // 30-120 min
+        let startMs = tsOffset(startOffset).toMillis();
+        let endMs = startMs + duration * 60 * 1000;
+
+        // Clamp to operating hours
+        const clamped = clampToOperatingHours(startMs, endMs);
+        startMs = clamped.startMs;
+        endMs = clamped.endMs;
+        duration = Math.round((endMs - startMs) / 60000);
+
+        const startTs = Timestamp.fromMillis(startMs);
+        const endTs = Timestamp.fromMillis(endMs);
+        const status = computeStatus(startMs, endMs);
+
+        // 10% chance: outside-zone payer (paid but not inside any geofence)
+        const isOutside = seededRandom() < 0.10;
+        const loc = isOutside ? outsideLocationForZone(zone) : locationForZone(zone);
+        const zoneId = isOutside ? null : zone.id;
+        const isCompliant = isOutside ? false : (status === 'active');
 
         const extRef = db.collection('external_payment_sessions').doc();
         batch.set(extRef, {
@@ -151,14 +220,10 @@ async function generateNewSessions() {
             end_time: endTs,
             duration_minutes: duration,
             status: status,
-            raw_payload: { source: 'auto-generator', zone_hint: zone.id },
+            raw_payload: { source: 'auto-generator', zone_hint: isOutside ? null : zone.id },
             received_at: tsNow(),
             updated_at: tsNow(),
         });
-
-        const matchedZone = findZoneForCoords(loc, ZONES);
-        const zoneId = matchedZone ? matchedZone.id : null;
-        const isCompliant = zoneId !== null && status === 'active';
 
         const psRef = db.collection('parking_sessions').doc();
         batch.set(psRef, {
@@ -330,11 +395,25 @@ async function populateMissingSessions() {
 
         for (let i = 0; i < deficit; i++) {
             const startOffset = -Math.floor(seededRandom() * 30); // Started 0-30 min ago
-            const duration = 30 + Math.floor(seededRandom() * 90); // 30-120 min
-            const startTs = tsOffset(startOffset);
-            const endTs = tsOffset(startOffset + duration);
-            const loc = locationForZone(zone);
-            const status = computeStatus(startTs.toMillis(), endTs.toMillis());
+            let duration = 30 + Math.floor(seededRandom() * 90); // 30-120 min
+            let startMs = tsOffset(startOffset).toMillis();
+            let endMs = startMs + duration * 60 * 1000;
+
+            // Clamp to operating hours
+            const clamped = clampToOperatingHours(startMs, endMs);
+            startMs = clamped.startMs;
+            endMs = clamped.endMs;
+            duration = Math.round((endMs - startMs) / 60000);
+
+            const startTs = Timestamp.fromMillis(startMs);
+            const endTs = Timestamp.fromMillis(endMs);
+            const status = computeStatus(startMs, endMs);
+
+            // 10% chance: outside-zone payer (paid but not inside any geofence)
+            const isOutside = seededRandom() < 0.10;
+            const loc = isOutside ? outsideLocationForZone(zone) : locationForZone(zone);
+            const zoneId = isOutside ? null : zone.id;
+            const isCompliant = isOutside ? false : (status === 'active');
 
             const extRef = db.collection('external_payment_sessions').doc();
             batch.set(extRef, {
@@ -345,14 +424,10 @@ async function populateMissingSessions() {
                 end_time: endTs,
                 duration_minutes: duration,
                 status: status,
-                raw_payload: { source: 'auto-generator', zone_hint: zone.id },
+                raw_payload: { source: 'auto-generator', zone_hint: isOutside ? null : zone.id },
                 received_at: tsNow(),
                 updated_at: tsNow(),
             });
-
-            const matchedZone = findZoneForCoords(loc, ZONES);
-            const zoneId = matchedZone ? matchedZone.id : null;
-            const isCompliant = zoneId !== null && status === 'active';
 
             const psRef = db.collection('parking_sessions').doc();
             batch.set(psRef, {

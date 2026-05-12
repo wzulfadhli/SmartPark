@@ -19,6 +19,28 @@ function seededRandom() {
     return (_seed - 1) / 2147483646;
 }
 
+// ---- Operating hours helpers ----
+// Parking operation: 8:00 AM - 6:00 PM
+const OP_START_HOUR = 8;
+const OP_END_HOUR = 18;
+
+function getTodayAtHour(hour) {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.getTime();
+}
+
+function clampToOperatingHours(startMs, endMs) {
+    const opStart = getTodayAtHour(OP_START_HOUR);
+    const opEnd = getTodayAtHour(OP_END_HOUR);
+    if (startMs < opStart) startMs = opStart;
+    if (endMs > opEnd) endMs = opEnd;
+    if (startMs >= endMs) {
+        endMs = startMs + 5 * 60 * 1000; // minimum 5-min session
+    }
+    return { startMs, endMs };
+}
+
 // ============================================================
 // GEOFENCED ZONES
 // ============================================================
@@ -117,8 +139,14 @@ const DUMMY_PAYMENT_SESSIONS = [];
 
 // Helper to create a session (snake_case to match Firestore schema)
 function createSession(zoneId, vehicleId, startOffsetMinutes, durationMinutes) {
-    const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
-    const endTime = startTime + (durationMinutes * 60 * 1000);
+    let startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
+    let endTime = startTime + (durationMinutes * 60 * 1000);
+
+    // Clamp to operating hours (8 AM - 6 PM)
+    const clamped = clampToOperatingHours(startTime, endTime);
+    startTime = clamped.startMs;
+    endTime = clamped.endMs;
+    durationMinutes = Math.round((endTime - startTime) / 60000);
     const zone = DUMMY_ZONES.find(z => z.id === zoneId);
 
     // Generate a realistic GPS location within the zone's geofence
@@ -412,8 +440,12 @@ DUMMY_PAYMENT_SESSIONS.push(createSession('zone_ss17_1b', 'VEH_195', -18, 60));
 // ============================================================
 
 function createOutsideSession(vehicleId, lat, lng, startOffsetMinutes, durationMinutes) {
-    const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
-    const endTime = startTime + (durationMinutes * 60 * 1000);
+    let startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
+    let endTime = startTime + (durationMinutes * 60 * 1000);
+    const clamped = clampToOperatingHours(startTime, endTime);
+    startTime = clamped.startMs;
+    endTime = clamped.endMs;
+    durationMinutes = Math.round((endTime - startTime) / 60000);
     return {
         id: `session_${seededRandom().toString(36).substr(2, 9)}`,
         vehicle_id: vehicleId,
@@ -495,8 +527,12 @@ for (let i = 186; i <= 190; i++) {
 // ============================================================
 
 function createManualSession(vehicleId, lat, lng, startOffsetMinutes, durationMinutes) {
-    const startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
-    const endTime   = startTime + (durationMinutes * 60 * 1000);
+    let startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
+    let endTime = startTime + (durationMinutes * 60 * 1000);
+    const clamped = clampToOperatingHours(startTime, endTime);
+    startTime = clamped.startMs;
+    endTime = clamped.endMs;
+    durationMinutes = Math.round((endTime - startTime) / 60000);
     return {
         id:              `manual_${vehicleId}_${Date.now()}`,
         vehicle_id:      vehicleId,
