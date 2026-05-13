@@ -411,6 +411,14 @@
                     <span class="nav-label">Gps/Geofencing Map</span>
                 </button>
 
+                <div class="nav-divider"></div>
+                <span class="nav-section-label">Admin</span>
+
+                <button class="nav-item-btn" id="nav-zones" onclick="navigate('zones')">
+                    <i class="bi bi-geo-alt-fill"></i>
+                    <span class="nav-label">Zone Manager</span>
+                </button>
+
                 <div class="nav-divider" id="actionsDivider" style="display:none;"></div>
                 <span class="nav-section-label" id="actionsLabel" style="display:none;">Actions</span>
 
@@ -485,7 +493,8 @@
         const PAGES = {
             summary: { src: 'dashboard.html', title: 'Compliance Dashboard' },
             monitor: { src: 'monitor.html', title: 'Zone Monitor' },
-            map: { src: 'map.html', title: 'Gps/Geofencing Map' }
+            map: { src: 'map.html', title: 'Gps/Geofencing Map' },
+            zones: { src: 'zones-admin.html', title: 'Zone Manager' }
         };
         let currentPage = 'summary';
 

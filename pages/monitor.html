@@ -134,7 +134,7 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-1 fw-bold small">Total Zones</p>
-                        <h2 class="mb-0 fw-bold" id="totalZones">0</h2>
+                        <h2 class="mb-0 fw-bold skeleton skeleton-text" id="totalZones">&nbsp;</h2>
                     </div>
                     <div class="stat-icon bg-light text-secondary">
                         <i class="bi bi-geo-alt fs-5"></i>
@@ -147,7 +147,7 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-1 fw-bold small">Total Lots</p>
-                        <h2 class="mb-0 fw-bold" id="totalLots">0</h2>
+                        <h2 class="mb-0 fw-bold skeleton skeleton-text" id="totalLots">&nbsp;</h2>
                     </div>
                     <div class="stat-icon" style="background-color:#3b4256;color:white;">
                         <i class="bi bi-p-square-fill fs-5"></i>
@@ -160,7 +160,7 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-1 fw-bold small">Active Sessions</p>
-                        <h2 class="mb-0 fw-bold" id="activeSessions">0</h2>
+                        <h2 class="mb-0 fw-bold skeleton skeleton-text" id="activeSessions">&nbsp;</h2>
                     </div>
                     <div class="stat-icon" style="background-color:#d1fae5;color:#10b981;">
                         <i class="bi bi-car-front-fill fs-5"></i>
@@ -173,7 +173,7 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-1 fw-bold small">Avg Compliance</p>
-                        <h2 class="mb-0 fw-bold" id="avgCompliance">0%</h2>
+                        <h2 class="mb-0 fw-bold skeleton skeleton-text" id="avgCompliance">&nbsp;</h2>
                     </div>
                     <div class="stat-icon" style="background-color:#fecaca;color:#ef4444;">
                         <i class="bi bi-graph-up-arrow fs-5"></i>
@@ -218,8 +218,12 @@
                                 </tr>
                             </thead>
                             <tbody id="activeSessionsTable">
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No active sessions</td>
+                                <tr class="skeleton-row">
+                                    <td colspan="7" class="py-3">
+                                        <div class="skeleton skeleton-text" style="width:100%;"></div>
+                                        <div class="skeleton skeleton-text" style="width:90%;"></div>
+                                        <div class="skeleton skeleton-text" style="width:70%;"></div>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -233,7 +237,34 @@
     <div class="row">
         <div class="col-12 mb-3">
             <h5 class="mb-2">Geofenced Zones</h5>
-            <div class="row" id="zonesGrid"></div>
+            <div class="row" id="zonesGrid">
+                <div class="col-md-4 skeleton-zone-col">
+                    <div class="card p-3">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text" style="width:80%"></div>
+                        <div class="skeleton skeleton-text" style="width:50%"></div>
+                    </div>
+                </div>
+                <div class="col-md-4 skeleton-zone-col">
+                    <div class="card p-3">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text" style="width:80%"></div>
+                        <div class="skeleton skeleton-text" style="width:50%"></div>
+                    </div>
+                </div>
+                <div class="col-md-4 skeleton-zone-col">
+                    <div class="card p-3">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-text" style="width:80%"></div>
+                        <div class="skeleton skeleton-text" style="width:50%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="empty-state-box skeleton-hidden" id="zonesEmptyState">
+                <i class="bi bi-geo-alt"></i>
+                <div class="fw-bold mb-1">No zones available</div>
+                <div class="small">Zones will appear here once loaded.</div>
+            </div>
         </div>
     </div>
 
@@ -259,6 +290,17 @@
             const zones = window.ZONES || [];
             const sessions = window.PAYMENT_SESSIONS || [];
             const now = Date.now();
+
+            // Remove skeletons once data is available
+            document.querySelectorAll('.skeleton').forEach(el => el.classList.remove('skeleton', 'skeleton-text', 'skeleton-title'));
+            document.querySelectorAll('.skeleton-row').forEach(el => el.remove());
+
+            // Toggle empty state for zones grid
+            const hasZones = zones.length > 0;
+            document.getElementById('zonesEmptyState').classList.toggle('skeleton-hidden', hasZones);
+            document.querySelectorAll('.skeleton-zone-col').forEach(el => {
+                el.style.display = hasZones ? 'none' : '';
+            });
 
             // Single bucketing pass via UIHelpers
             const { activeByZone, totalActive } = bucketActiveByZone(sessions, zones, now);

@@ -14,6 +14,7 @@
             center: { lat: 3.0765, lng: 101.5890 },
             radius: 150,
             totalLots: 50,
+            targetOccupancy: 0.70,
             isActive: true,
         },
         {
@@ -22,6 +23,7 @@
             center: { lat: 3.0750, lng: 101.5895 },
             radius: 120,
             totalLots: 40,
+            targetOccupancy: 0.95,
             isActive: true,
         },
         {
@@ -30,6 +32,7 @@
             center: { lat: 3.0485, lng: 101.5850 },
             radius: 200,
             totalLots: 120,
+            targetOccupancy: 0.375,
             isActive: true,
         },
         {
@@ -38,6 +41,7 @@
             center: { lat: 3.0820, lng: 101.5865 },
             radius: 180,
             totalLots: 75,
+            targetOccupancy: 0.80,
             isActive: true,
         },
         {
@@ -47,6 +51,7 @@
             radius: 200,
             bufferMeters: 35,
             totalLots: 40,
+            targetOccupancy: 0.60,
             isActive: true,
             line: [
                 { lat: 3.077359121599855,  lng: 101.58049118471104 },
@@ -66,6 +71,7 @@
             radius: 70,
             bufferMeters: 35,
             totalLots: 30,
+            targetOccupancy: 0.17,
             isActive: true,
             line: [
                 { lat: 3.0784821661062836, lng: 101.57993950376465 },

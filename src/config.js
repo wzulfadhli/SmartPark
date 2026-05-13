@@ -11,8 +11,10 @@
 (function (root) {
     const SP_CONFIG = {
         // ---- App ----
-        APP_VERSION: '2.1.0',
-        USE_DUMMY_DATA: true, // false → use Firebase
+        APP_VERSION: '2.2.0',
+        USE_DUMMY_DATA: true,  // true → generate dummy sessions in-browser
+        USE_DUMMY_ZONES: false, // false → load zones from Firestore; true → use zones-config.js
+        DEFAULT_TARGET_OCCUPANCY: 0.65, // fallback if zone has no targetOccupancy field
 
         // ---- Operating Hours (parking payment window) ----
         OPERATING_HOURS: {

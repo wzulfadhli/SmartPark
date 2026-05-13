@@ -6,13 +6,19 @@
 // determined by active payment sessions within geofenced zones.
 // ============================================================
 
-const APP_VERSION = (typeof SP_CONFIG !== 'undefined') ? SP_CONFIG.APP_VERSION : '2.1.0';
+const APP_VERSION = (typeof SP_CONFIG !== 'undefined') ? SP_CONFIG.APP_VERSION : '2.2.0';
 const DB_NAME = 'SmartParkingDB_GPS';
 
 // ============================================================
-// DUMMY DATA MODE (for testing without Firebase)
+// DATA MODE FLAGS
 // ============================================================
-const USE_DUMMY_DATA = (typeof SP_CONFIG !== 'undefined') ? SP_CONFIG.USE_DUMMY_DATA : true;
+// USE_DUMMY_DATA  = true  → generate sessions in-browser (no real payment data)
+// USE_DUMMY_ZONES = true  → use ZONE_DEFINITIONS from zones-config.js
+//                   false → load zones from Firestore (hybrid mode)
+// ============================================================
+const USE_DUMMY_DATA  = (typeof SP_CONFIG !== 'undefined') ? SP_CONFIG.USE_DUMMY_DATA  : true;
+const USE_DUMMY_ZONES = (typeof SP_CONFIG !== 'undefined' && SP_CONFIG.USE_DUMMY_ZONES !== undefined)
+    ? SP_CONFIG.USE_DUMMY_ZONES : true;
 
 // Firebase config — read from centralized SP_CONFIG (config.js)
 const FIREBASE_CONFIG = (typeof SP_CONFIG !== 'undefined' && SP_CONFIG.FIREBASE)
@@ -158,105 +164,73 @@ function initFirebase() {
             });
             window.ZONES = zones;
             console.log('[Firebase] window.ZONES set:', window.ZONES.length, 'zones');
+
+            // Hybrid mode: zones from Firestore, sessions generated in-browser
+            if (USE_DUMMY_DATA && typeof DummyData !== 'undefined') {
+                console.log('[Hybrid] Regenerating dummy sessions for', zones.length, 'Firestore zones');
+                const result = DummyData.generateSessions(zones);
+                paymentSessions = result.sessions;
+                window.PAYMENT_SESSIONS = paymentSessions;
+            }
+
             updateAll();
             window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
         }, (err) => {
             console.error('[Firebase] Zones listener error:', err);
         });
 
-        // Listen for real-time payment session changes
-        paymentSessionsRef
-            .onSnapshot((snapshot) => {
-                console.log('[Firebase] Payment sessions snapshot received:', snapshot.size, 'documents');
-                paymentSessions = [];
-                snapshot.forEach(doc => {
-                    // Map snake_case Firestore fields to app format
-                    const data = doc.data();
-                    // Convert Firestore Timestamps to milliseconds if needed
-                    // Handle both Admin SDK format (_seconds) and Web SDK format (seconds + toMillis)
-                    const toMillis = (ts) => {
-                        if (ts && typeof ts === 'object') {
-                            // Web SDK Timestamp has toMillis() method
-                            if (typeof ts.toMillis === 'function') {
-                                return ts.toMillis();
-                            }
-                            // Admin SDK format has _seconds
-                            if (ts._seconds !== undefined) {
-                                return ts._seconds * 1000;
-                            }
-                            // Web SDK format has seconds property
-                            if (ts.seconds !== undefined) {
-                                return ts.seconds * 1000;
-                            }
-                        }
-                        return ts;
-                    };
-                    const startMs = toMillis(data.start_time);
-                    const endMs = toMillis(data.end_time);
-                    const now = Date.now();
+        // In hybrid mode (USE_DUMMY_DATA=true), sessions are generated locally
+        // so we skip the payment sessions and compliance listeners.
+        if (!USE_DUMMY_DATA) {
+            // Listen for real-time payment session changes
+            paymentSessionsRef
+                .onSnapshot((snapshot) => {
+                    console.log('[Firebase] Payment sessions snapshot received:', snapshot.size, 'documents');
+                    paymentSessions = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const startMs = toMillis(data.start_time);
+                        const endMs = toMillis(data.end_time);
 
-                    // Compute real status based on current time (don't trust stored status)
-                    let realStatus;
-                    if (now < startMs) {
-                        realStatus = 'upcoming';
-                    } else if (now > endMs) {
-                        realStatus = 'completed';
-                    } else {
-                        realStatus = 'active';
-                    }
-
-                    paymentSessions.push({
-                        ...data,
-                        id: doc.id,
-                        start_time: startMs,
-                        end_time: endMs,
-                        status: realStatus,
-                        created_at: toMillis(data.created_at),
-                        updated_at: toMillis(data.updated_at)
+                        paymentSessions.push({
+                            ...data,
+                            id: doc.id,
+                            start_time: startMs,
+                            end_time: endMs,
+                            status: computeStatus(startMs, endMs),
+                            created_at: toMillis(data.created_at),
+                            updated_at: toMillis(data.updated_at)
+                        });
                     });
+                    window.PAYMENT_SESSIONS = paymentSessions;
+                    console.log('[Firebase] window.PAYMENT_SESSIONS set:', window.PAYMENT_SESSIONS.length, 'sessions');
+                    calculateAndStoreCompliance();
+                    updateAll();
+                    window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+                }, (err) => {
+                    console.error('[Firebase] Payment sessions listener error:', err);
                 });
-                window.PAYMENT_SESSIONS = paymentSessions;
-                console.log('[Firebase] window.PAYMENT_SESSIONS set:', window.PAYMENT_SESSIONS.length, 'sessions');
-                calculateAndStoreCompliance();
-                updateAll();
-                window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
-            }, (err) => {
-                console.error('[Firebase] Payment sessions listener error:', err);
-            });
 
-        // Listen for real-time compliance snapshot changes
-        complianceSnapshotsRef
-            .orderBy('timestamp', 'desc')
-            .limit(100)
-            .onSnapshot((snapshot) => {
-                complianceSnapshots = [];
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    // Convert Firestore Timestamps to milliseconds if needed
-                    // Handle both Admin SDK format (_seconds) and Web SDK format (seconds + toMillis)
-                    const toMillis = (ts) => {
-                        if (ts && typeof ts === 'object') {
-                            if (typeof ts.toMillis === 'function') {
-                                return ts.toMillis();
-                            }
-                            if (ts._seconds !== undefined) {
-                                return ts._seconds * 1000;
-                            }
-                            if (ts.seconds !== undefined) {
-                                return ts.seconds * 1000;
-                            }
-                        }
-                        return ts;
-                    };
-                    complianceSnapshots.push({
-                        ...data,
-                        id: doc.id,
-                        timestamp: toMillis(data.timestamp),
-                        created_at: toMillis(data.created_at)
+            // Listen for real-time compliance snapshot changes
+            complianceSnapshotsRef
+                .orderBy('timestamp', 'desc')
+                .limit(100)
+                .onSnapshot((snapshot) => {
+                    complianceSnapshots = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        complianceSnapshots.push({
+                            ...data,
+                            id: doc.id,
+                            timestamp: toMillis(data.timestamp),
+                            created_at: toMillis(data.created_at)
+                        });
                     });
+                    window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
                 });
-                window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
-            });
+        } else {
+            console.log('[Hybrid] Skipping sessions & compliance listeners — using dummy data');
+        }
 
         console.log('[Firebase] Firestore realtime listeners attached');
         return true;
@@ -303,12 +277,13 @@ async function syncComplianceSnapshotToFirebase(snapshot) {
 
 async function initializeApp() {
     console.log('Initializing GPS/Geofencing Parking System v' + APP_VERSION);
+    console.log('[Config] USE_DUMMY_DATA=' + USE_DUMMY_DATA + ', USE_DUMMY_ZONES=' + USE_DUMMY_ZONES);
 
     await initDatabase();
 
-    // Use dummy data if enabled
-    if (USE_DUMMY_DATA) {
-        console.log('[Demo] Using dummy data mode');
+    // ---- Fully offline demo (zones + sessions from JS) ----
+    if (USE_DUMMY_DATA && USE_DUMMY_ZONES) {
+        console.log('[Demo] Full dummy mode (zones + sessions from JS)');
         loadDummyData();
         updateStats();
         startComplianceCalculation();
@@ -316,26 +291,35 @@ async function initializeApp() {
         return;
     }
 
-    // Otherwise, use Firebase
-    const firebaseReady = initFirebase();
+    // ---- Hybrid: zones from Firestore, sessions generated in-browser ----
+    if (USE_DUMMY_DATA && !USE_DUMMY_ZONES) {
+        console.log('[Hybrid] Zones from Firestore, sessions generated in-browser');
+        const firebaseReady = initFirebase();
+        if (!firebaseReady) {
+            console.warn('[Hybrid] Firebase init failed — falling back to local zones');
+            loadDummyData();
+        }
+        // Sessions will be generated when the zones onSnapshot fires
+        updateStats();
+        startComplianceCalculation();
+        showNotification('GPS Parking System Ready (Hybrid Mode)', 'success');
+        return;
+    }
 
-    // If Firebase isn't configured yet, fall back to cached local state
+    // ---- Full Firebase (zones + sessions from Firestore) ----
+    const firebaseReady = initFirebase();
     if (!firebaseReady) {
         await loadCachedState();
     }
-
-    // Load sample zones if none exist (for demo purposes)
-    if (zones.length === 0) {
-        loadSampleZones();
+    if (zones.length === 0 && typeof ZONE_DEFINITIONS !== 'undefined') {
+        zones = ZONE_DEFINITIONS;
+        window.ZONES = zones;
+        console.log('[Fallback] Using local zone definitions');
     }
 
     updateStats();
-
     startComplianceCalculation();
-    // setupPushNotifications(); // disabled
-    // setupBackgroundSync(); // disabled
     updateThemeIcon();
-
     showNotification('GPS Parking System Ready', 'success');
 }
 
@@ -358,8 +342,14 @@ async function loadCachedState() {
     }
 }
 
-// Load dummy data for demo (in production, these come from Firestore)
+// Load dummy data for demo (zones + sessions from JS globals)
 function loadDummyData() {
+    // If DummyData hasn't auto-generated yet (USE_DUMMY_ZONES was false at load),
+    // generate now with whatever zones are available.
+    if (typeof DummyData !== 'undefined' && typeof DUMMY_ZONES === 'undefined') {
+        var srcZones = (typeof ZONE_DEFINITIONS !== 'undefined') ? ZONE_DEFINITIONS : [];
+        DummyData.generateSessions(srcZones);
+    }
     if (typeof DUMMY_ZONES !== 'undefined') {
         zones = DUMMY_ZONES;
         window.ZONES = DUMMY_ZONES;
@@ -372,76 +362,8 @@ function loadDummyData() {
     }
 }
 
-// Load sample zones for demo (in production, these come from Firestore)
-function loadSampleZones() {
-    zones = [
-        {
-            id: 'zone_ss15_4',
-            name: 'Jalan SS15/4',
-            center: { lat: 3.0765, lng: 101.5890 },
-            radius: 150,
-            totalLots: 50,
-            createdAt: new Date().toISOString()
-        },
-        {
-            id: 'zone_ss15_8',
-            name: 'Jalan SS15/8',
-            center: { lat: 3.0750, lng: 101.5895 },
-            radius: 120,
-            totalLots: 40,
-            createdAt: new Date().toISOString()
-        },
-        {
-            id: 'zone_usj10_taipan',
-            name: 'USJ 10 Taipan',
-            center: { lat: 3.0485, lng: 101.5850 },
-            radius: 200,
-            totalLots: 120,
-            createdAt: new Date().toISOString()
-        },
-        {
-            id: 'zone_ss16_1',
-            name: 'Jalan SS16/1',
-            center: { lat: 3.0820, lng: 101.5865 },
-            radius: 180,
-            totalLots: 75,
-            createdAt: new Date().toISOString()
-        },
-        {
-            id: 'zone_ss17_1e',
-            name: 'Jalan SS17/1E',
-            center: { lat: 3.07597, lng: 101.58010 },
-            radius: 200,
-            bufferMeters: 35,
-            totalLots: 40,
-            line: [
-                { lat: 3.077359121599855,  lng: 101.58049118471104 },
-                { lat: 3.0770779840562454, lng: 101.58043347219171 },
-                { lat: 3.077049169401164,  lng: 101.58042957269771 },
-                { lat: 3.076699191195715,  lng: 101.58032093230793 },
-                { lat: 3.0764660411565927, lng: 101.5802499517277  },
-                { lat: 3.0761054317447503, lng: 101.58015388301482 },
-                { lat: 3.075641876459102,  lng: 101.58001257976917 },
-                { lat: 3.0745650069976165, lng: 101.57970801776668 }
-            ],
-            createdAt: new Date().toISOString()
-        },
-        {
-            id: 'zone_ss17_1b',
-            name: 'Jalan SS17/1B',
-            center: { lat: 3.07856, lng: 101.58066 },
-            radius: 70,
-            bufferMeters: 35,
-            totalLots: 30,
-            line: [
-                { lat: 3.0784821661062836, lng: 101.57993950376465 },
-                { lat: 3.0786421942890456, lng: 101.58137902736576 }
-            ],
-            createdAt: new Date().toISOString()
-        }
-    ];
-    console.log('[Demo] Loaded sample zones');
-}
+// loadSampleZones removed — zone definitions now live in zones-config.js
+// and are loaded via ZONE_DEFINITIONS global or Firestore.
 
 // ============================================================
 // PUSH NOTIFICATIONS & BACKGROUND SYNC

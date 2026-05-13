@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zone Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="../src/theme.css">
+    <style>
+        body {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            padding: 24px;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .zone-table {
+            background: var(--surface-color);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .zone-table table {
+            margin: 0;
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text-primary);
+            --bs-table-border-color: var(--border-color);
+            --bs-table-striped-bg: transparent;
+            --bs-table-hover-bg: var(--surface-hover);
+        }
+
+        .zone-table th {
+            background: var(--surface-hover) !important;
+            color: var(--text-secondary) !important;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color) !important;
+            padding: 12px 16px;
+        }
+
+        .zone-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color) !important;
+            vertical-align: middle;
+            font-size: 0.875rem;
+            background: transparent !important;
+            color: var(--text-primary);
+        }
+
+        .zone-table tr {
+            background: transparent !important;
+        }
+
+        .zone-table tr:last-child td {
+            border-bottom: none !important;
+        }
+
+        .zone-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .zone-type-badge.circle {
+            background: rgba(99, 102, 241, 0.15);
+            color: #6366f1;
+        }
+
+        .zone-type-badge.line {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .occ-bar {
+            width: 60px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border-color);
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 6px;
+        }
+
+        .occ-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-icon:hover {
+            background: var(--surface-hover);
+        }
+
+        .btn-icon.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .header-bar h5 {
+            margin: 0;
+            font-weight: 700;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 20px;
+            flex: 1;
+            min-width: 130px;
+        }
+
+        .stat-card .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .stat-card .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        /* Modal overrides for theme */
+        .modal-content {
+            background: var(--surface-color) !important;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .modal-header {
+            border-bottom-color: var(--border-color) !important;
+        }
+
+        .modal-footer {
+            border-top-color: var(--border-color) !important;
+        }
+
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .form-control,
+        .form-select {
+            background: var(--bg-color) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            background: var(--bg-color) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--accent-primary) !important;
+            box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.15);
+        }
+
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-check-label {
+            color: var(--text-primary);
+        }
+
+        .btn-close {
+            filter: var(--btn-close-filter, none);
+        }
+
+        [data-theme="dark"] .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+
+        .line-coords-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px;
+            background: var(--bg-color);
+        }
+
+        .line-coord-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 0.8rem;
+        }
+
+        .line-coord-row input {
+            width: 120px;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.active {
+            background: #10b981;
+        }
+
+        .status-dot.inactive {
+            background: #ef4444;
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        // Inherit theme from parent shell
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        window.addEventListener('message', e => {
+            if (e.data && e.data.type === 'theme') {
+                document.documentElement.setAttribute('data-theme', e.data.value);
+            }
+        });
+    </script>
+
+    <!-- Stats row -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="label">Total Zones</div>
+            <div class="value" id="statTotalZones">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Active Zones</div>
+            <div class="value" id="statActiveZones" style="color: #10b981;">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Total Lots</div>
+            <div class="value" id="statTotalLots">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Data Source</div>
+            <div class="value" id="statDataSource" style="font-size: 0.9rem;">—</div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header-bar">
+        <h5><i class="bi bi-geo-alt-fill me-2"></i>Parking Zones</h5>
+        <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-outline-secondary" id="btnSeedLocal" onclick="seedFromLocal()">
+                <i class="bi bi-cloud-upload me-1"></i><span id="btnSeedLabel">Seed from Local</span>
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="openAddModal()">
+                <i class="bi bi-plus-lg me-1"></i>Add Zone
+            </button>
+        </div>
+    </div>
+
+    <!-- Zone table -->
+    <div class="zone-table" id="zoneTableContainer">
+        <table class="table table-borderless" id="zoneTable">
+            <thead>
+                <tr>
+                    <th>Zone</th>
+                    <th>Type</th>
+                    <th>Lots</th>
+                    <th>Target Occ.</th>
+                    <th>Radius</th>
+                    <th>Status</th>
+                    <th style="width: 90px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="zoneTableBody"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState" style="display:none;">
+            <i class="bi bi-geo-alt d-block"></i>
+            <div class="fw-bold mb-1">No zones configured</div>
+            <div class="small mb-2">Click "Add Zone" to create one, or seed from your local zone definitions.</div>
+            <button class="btn btn-sm btn-outline-primary" onclick="seedFromLocal()">
+                <i class="bi bi-cloud-upload me-1"></i>Seed 6 zones from zones-config.js
+            </button>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal fade" id="zoneModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title fw-bold" id="zoneModalTitle">Add Zone</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="zoneForm">
+                        <input type="hidden" id="zoneEditId">
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Zone ID</label>
+                                <input type="text" class="form-control" id="zoneId" placeholder="e.g. zone_ss15_4"
+                                    required>
+                                <small class="text-muted">Unique identifier (no spaces)</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Zone Name</label>
+                                <input type="text" class="form-control" id="zoneName" placeholder="e.g. Jalan SS15/4"
+                                    required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Zone Type</label>
+                                <select class="form-select" id="zoneType" onchange="toggleLineFields()">
+                                    <option value="circle">Circle</option>
+                                    <option value="line">Line (Polyline)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Total Lots</label>
+                                <input type="number" class="form-control" id="zoneTotalLots" min="1" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Target Occupancy (%)</label>
+                                <input type="number" class="form-control" id="zoneTargetOcc" min="0" max="100"
+                                    step="1" value="65">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Center Latitude</label>
+                                <input type="number" class="form-control" id="zoneCenterLat" step="0.000001" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Center Longitude</label>
+                                <input type="number" class="form-control" id="zoneCenterLng" step="0.000001" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Radius (m)</label>
+                                <input type="number" class="form-control" id="zoneRadius" min="10" value="150">
+                            </div>
+                        </div>
+
+                        <!-- Line-specific fields -->
+                        <div id="lineFields" style="display:none;">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Buffer Width (m)</label>
+                                    <input type="number" class="form-control" id="zoneBufferMeters" min="5" value="35">
+                                </div>
+                            </div>
+                            <label class="form-label">Line Coordinates</label>
+                            <div class="line-coords-list" id="lineCoordsList"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-2"
+                                onclick="addLineCoord()">
+                                <i class="bi bi-plus-lg me-1"></i>Add Point
+                            </button>
+                        </div>
+
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="zoneIsActive" checked>
+                            <label class="form-check-label" for="zoneIsActive">Zone is active</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="saveZone()" id="btnSaveZone">
+                        <i class="bi bi-check-lg me-1"></i>Save Zone
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title fw-bold">Delete Zone</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Delete <strong id="deleteZoneName"></strong>? This cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete()">
+                        <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="../src/config.js"></script>
+    <script src="../src/zones-config.js"></script>
+    <script src="../src/session-utils.js"></script>
+    <script src="../src/geofencing-utils.js?v=2"></script>
+    <script src="../src/compliance-utils.js"></script>
+    <script src="../src/dummy-data.js"></script>
+    <script src="../src/app.js"></script>
+    <script src="../src/ui-helpers.js"></script>
+
+    <script>
+        // ---- State ----
+        let allZones = [];
+        let pendingDeleteId = null;
+        let zoneModal, deleteModal;
+
+        // ---- Init ----
+        document.addEventListener('DOMContentLoaded', () => {
+            zoneModal = new bootstrap.Modal(document.getElementById('zoneModal'));
+            deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            loadZones();
+        });
+
+        // Listen for data updates from app.js
+        window.addEventListener('parkingDataUpdated', loadZones);
+
+        // ---- Load zones from whatever source is active ----
+        function loadZones() {
+            const zones = window.ZONES || [];
+            allZones = zones;
+            renderTable();
+            renderStats();
+        }
+
+        // ---- Render ----
+        function renderStats() {
+            const total = allZones.length;
+            const active = allZones.filter(z => z.isActive !== false).length;
+            const lots = allZones.reduce((sum, z) => sum + (z.totalLots || 0), 0);
+            const isFirestore = (typeof SP_CONFIG !== 'undefined' && !SP_CONFIG.USE_DUMMY_ZONES);
+            const source = isFirestore
+                ? '<i class="bi bi-cloud-fill text-primary me-1"></i>Firestore'
+                : '<i class="bi bi-file-code me-1"></i>Local';
+
+            document.getElementById('statTotalZones').textContent = total;
+            document.getElementById('statActiveZones').textContent = active;
+            document.getElementById('statTotalLots').textContent = lots;
+            document.getElementById('statDataSource').innerHTML = source;
+
+            // Show seed button if Firestore mode + local defs available
+            const hasLocalDefs = (typeof ZONE_DEFINITIONS !== 'undefined' && ZONE_DEFINITIONS.length > 0);
+            const seedBtn = document.getElementById('btnSeedLocal');
+            seedBtn.style.display = (isFirestore && hasLocalDefs) ? '' : 'none';
+            document.getElementById('btnSeedLabel').textContent = total > 0 ? 'Reset to Default' : 'Seed from Local';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('zoneTableBody');
+            const empty = document.getElementById('emptyState');
+
+            if (!allZones.length) {
+                tbody.innerHTML = '';
+                empty.style.display = '';
+                return;
+            }
+            empty.style.display = 'none';
+
+            tbody.innerHTML = allZones.map(z => {
+                const type = z.line ? 'line' : 'circle';
+                const occPct = Math.round((z.targetOccupancy || 0.65) * 100);
+                const occColor = occPct >= 80 ? '#10b981' : occPct >= 50 ? '#f59e0b' : '#ef4444';
+                const statusDot = (z.isActive !== false)
+                    ? '<span class="status-dot active"></span> Active'
+                    : '<span class="status-dot inactive"></span> Inactive';
+                const radius = type === 'line' ? (z.bufferMeters || 20) + 'm buf' : (z.radius || 100) + 'm';
+
+                return `<tr>
+                    <td>
+                        <div class="fw-bold" style="color: var(--text-primary);">${z.name || z.id}</div>
+                        <small class="text-muted">${z.id}</small>
+                    </td>
+                    <td><span class="zone-type-badge ${type}"><i class="bi bi-${type === 'circle' ? 'circle' : 'bezier2'}"></i> ${type}</span></td>
+                    <td class="fw-bold">${z.totalLots || 0}</td>
+                    <td>
+                        ${occPct}%
+                        <div class="occ-bar"><div class="occ-bar-fill" style="width:${occPct}%;background:${occColor};"></div></div>
+                    </td>
+                    <td>${radius}</td>
+                    <td>${statusDot}</td>
+                    <td>
+                        <button class="btn-icon" onclick="openEditModal('${z.id}')" title="Edit"><i class="bi bi-pencil"></i></button>
+                        <button class="btn-icon danger" onclick="openDeleteModal('${z.id}')" title="Delete"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ---- Line coordinate fields ----
+        let lineCoords = [];
+
+        function toggleLineFields() {
+            const isLine = document.getElementById('zoneType').value === 'line';
+            document.getElementById('lineFields').style.display = isLine ? '' : 'none';
+            if (isLine && lineCoords.length < 2) {
+                lineCoords = [{ lat: '', lng: '' }, { lat: '', lng: '' }];
+                renderLineCoords();
+            }
+        }
+
+        function renderLineCoords() {
+            const list = document.getElementById('lineCoordsList');
+            list.innerHTML = lineCoords.map((c, i) => `
+                <div class="line-coord-row">
+                    <span class="text-muted small" style="width:20px;">${i + 1}.</span>
+                    <input type="number" class="form-control" step="0.000001" placeholder="Lat"
+                           value="${c.lat}" onchange="lineCoords[${i}].lat=parseFloat(this.value)">
+                    <input type="number" class="form-control" step="0.000001" placeholder="Lng"
+                           value="${c.lng}" onchange="lineCoords[${i}].lng=parseFloat(this.value)">
+                    ${lineCoords.length > 2 ? `<button class="btn-icon danger" onclick="removeLineCoord(${i})" title="Remove"><i class="bi bi-x"></i></button>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function addLineCoord() {
+            lineCoords.push({ lat: '', lng: '' });
+            renderLineCoords();
+        }
+
+        function removeLineCoord(i) {
+            lineCoords.splice(i, 1);
+            renderLineCoords();
+        }
+
+        // ---- Modal: Add ----
+        function openAddModal() {
+            document.getElementById('zoneModalTitle').textContent = 'Add Zone';
+            document.getElementById('zoneForm').reset();
+            document.getElementById('zoneEditId').value = '';
+            document.getElementById('zoneId').disabled = false;
+            document.getElementById('zoneTargetOcc').value = '65';
+            document.getElementById('zoneIsActive').checked = true;
+            lineCoords = [];
+            toggleLineFields();
+            zoneModal.show();
+        }
+
+        // ---- Modal: Edit ----
+        function openEditModal(id) {
+            const z = allZones.find(zone => zone.id === id);
+            if (!z) return;
+
+            document.getElementById('zoneModalTitle').textContent = 'Edit Zone';
+            document.getElementById('zoneEditId').value = z.id;
+            document.getElementById('zoneId').value = z.id;
+            document.getElementById('zoneId').disabled = true; // can't change ID
+            document.getElementById('zoneName').value = z.name || '';
+            document.getElementById('zoneType').value = z.line ? 'line' : 'circle';
+            document.getElementById('zoneTotalLots').value = z.totalLots || '';
+            document.getElementById('zoneTargetOcc').value = Math.round((z.targetOccupancy || 0.65) * 100);
+            document.getElementById('zoneCenterLat').value = z.center ? z.center.lat : '';
+            document.getElementById('zoneCenterLng').value = z.center ? z.center.lng : '';
+            document.getElementById('zoneRadius').value = z.radius || 150;
+            document.getElementById('zoneBufferMeters').value = z.bufferMeters || 35;
+            document.getElementById('zoneIsActive').checked = z.isActive !== false;
+
+            lineCoords = z.line ? z.line.map(p => ({ lat: p.lat, lng: p.lng })) : [];
+            toggleLineFields();
+            if (z.line) renderLineCoords();
+
+            zoneModal.show();
+        }
+
+        // ---- Save (Add / Edit) ----
+        async function saveZone() {
+            const editId = document.getElementById('zoneEditId').value;
+            const id = editId || document.getElementById('zoneId').value.trim();
+            const name = document.getElementById('zoneName').value.trim();
+            const type = document.getElementById('zoneType').value;
+            const totalLots = parseInt(document.getElementById('zoneTotalLots').value);
+            const targetOcc = parseInt(document.getElementById('zoneTargetOcc').value) / 100;
+            const centerLat = parseFloat(document.getElementById('zoneCenterLat').value);
+            const centerLng = parseFloat(document.getElementById('zoneCenterLng').value);
+            const radius = parseInt(document.getElementById('zoneRadius').value);
+            const bufferMeters = parseInt(document.getElementById('zoneBufferMeters').value);
+            const isActive = document.getElementById('zoneIsActive').checked;
+
+            // Validation
+            if (!id || !name || !totalLots || isNaN(centerLat) || isNaN(centerLng)) {
+                showToast('Please fill in all required fields.', 'danger');
+                return;
+            }
+            if (!editId && allZones.find(z => z.id === id)) {
+                showToast('Zone ID already exists.', 'danger');
+                return;
+            }
+
+            const zoneDoc = {
+                name,
+                center: { lat: centerLat, lng: centerLng },
+                radius,
+                totalLots,
+                targetOccupancy: targetOcc,
+                isActive,
+                updatedAt: new Date().toISOString(),
+            };
+
+            if (type === 'line') {
+                const validCoords = lineCoords.filter(c => !isNaN(c.lat) && !isNaN(c.lng));
+                if (validCoords.length < 2) {
+                    showToast('Line zones need at least 2 coordinate points.', 'danger');
+                    return;
+                }
+                zoneDoc.line = validCoords;
+                zoneDoc.bufferMeters = bufferMeters;
+            }
+
+            if (!editId) {
+                zoneDoc.createdAt = new Date().toISOString();
+            }
+
+            // Write to Firestore if available
+            const db = window.firebaseDB;
+            if (db) {
+                try {
+                    await db.collection('zones').doc(id).set(zoneDoc, { merge: true });
+                    showToast(editId ? 'Zone updated.' : 'Zone created.', 'success');
+                } catch (err) {
+                    console.error('[ZoneAdmin] Firestore write failed:', err);
+                    showToast('Failed to save: ' + err.message, 'danger');
+                    return;
+                }
+            } else {
+                // Local-only mode: update window.ZONES directly
+                const existing = allZones.findIndex(z => z.id === id);
+                const fullZone = { id, ...zoneDoc };
+                if (existing >= 0) {
+                    allZones[existing] = Object.assign(allZones[existing], fullZone);
+                } else {
+                    allZones.push(fullZone);
+                }
+                window.ZONES = allZones;
+
+                // Regenerate dummy sessions with updated zones
+                if (typeof DummyData !== 'undefined') {
+                    DummyData.generateSessions(allZones);
+                    window.PAYMENT_SESSIONS = window.DUMMY_PAYMENT_SESSIONS;
+                }
+
+                window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+                showToast(editId ? 'Zone updated (local).' : 'Zone created (local).', 'success');
+            }
+
+            zoneModal.hide();
+            loadZones();
+        }
+
+        // ---- Delete ----
+        function openDeleteModal(id) {
+            const z = allZones.find(zone => zone.id === id);
+            if (!z) return;
+            pendingDeleteId = id;
+            document.getElementById('deleteZoneName').textContent = z.name || z.id;
+            deleteModal.show();
+        }
+
+        async function confirmDelete() {
+            if (!pendingDeleteId) return;
+
+            const db = window.firebaseDB;
+            if (db) {
+                try {
+                    await db.collection('zones').doc(pendingDeleteId).delete();
+                    showToast('Zone deleted.', 'success');
+                } catch (err) {
+                    console.error('[ZoneAdmin] Firestore delete failed:', err);
+                    showToast('Failed to delete: ' + err.message, 'danger');
+                    return;
+                }
+            } else {
+                // Local-only
+                allZones = allZones.filter(z => z.id !== pendingDeleteId);
+                window.ZONES = allZones;
+                if (typeof DummyData !== 'undefined') {
+                    DummyData.generateSessions(allZones);
+                    window.PAYMENT_SESSIONS = window.DUMMY_PAYMENT_SESSIONS;
+                }
+                window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+                showToast('Zone deleted (local).', 'success');
+            }
+
+            pendingDeleteId = null;
+            deleteModal.hide();
+            loadZones();
+        }
+
+        // ---- Seed from Local ----
+        async function seedFromLocal() {
+            const defs = (typeof ZONE_DEFINITIONS !== 'undefined') ? ZONE_DEFINITIONS : [];
+            if (!defs.length) {
+                showToast('No local zone definitions found.', 'warning');
+                return;
+            }
+
+            const db = window.firebaseDB;
+            if (!db) {
+                showToast('Firestore not available. Cannot seed.', 'danger');
+                return;
+            }
+
+            try {
+                const batch = db.batch();
+                defs.forEach(zone => {
+                    const { id, ...data } = zone;
+                    const ref = db.collection('zones').doc(id);
+                    batch.set(ref, {
+                        ...data,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    });
+                });
+                await batch.commit();
+                showToast('Seeded ' + defs.length + ' zones to Firestore.', 'success');
+                // The onSnapshot listener in app.js will pick up the new zones automatically
+            } catch (err) {
+                console.error('[ZoneAdmin] Seed failed:', err);
+                showToast('Seed failed: ' + err.message, 'danger');
+            }
+        }
+
+        // ---- Toast ----
+        function showToast(msg, type = 'info') {
+            const cls = { info: 'bg-primary', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' }[type] || 'bg-primary';
+            const html = `<div class="toast show align-items-center text-white ${cls} border-0 mb-2" role="alert">
+                <div class="d-flex">
+                    <div class="toast-body small">${msg}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>`;
+            const container = document.getElementById('toastContainer');
+            container.insertAdjacentHTML('beforeend', html);
+            setTimeout(() => {
+                const first = container.querySelector('.toast');
+                if (first) first.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>

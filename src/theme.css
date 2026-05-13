@@ -198,3 +198,53 @@ h1, h2, h3, h4, h5, h6 {
 @media (max-width: 768px) {
     .stat-icon { width: 38px !important; height: 38px !important; }
 }
+
+/* ---- Skeleton Loading ---- */
+@keyframes skeleton-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+.skeleton {
+    background: linear-gradient(90deg,
+        var(--border-color) 25%,
+        var(--surface-hover) 50%,
+        var(--border-color) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: 6px;
+    color: transparent !important;
+    user-select: none;
+    pointer-events: none;
+}
+.skeleton-text {
+    height: 1em;
+    margin-bottom: 0.5em;
+}
+.skeleton-text:last-child { margin-bottom: 0; }
+.skeleton-title {
+    height: 1.5em;
+    width: 60%;
+    margin-bottom: 0.75em;
+}
+.skeleton-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+.skeleton-card {
+    height: 100px;
+    border-radius: 12px;
+}
+.skeleton-hidden { display: none !important; }
+
+/* ---- Empty State ---- */
+.empty-state-box {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-secondary);
+}
+.empty-state-box i {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
