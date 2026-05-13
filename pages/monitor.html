@@ -397,6 +397,23 @@
             if (!e.data || !e.data.type) return;
             switch (e.data.type) {
                 case 'refresh': updateMonitor(); break;
+                case 'simulate':
+                    if (typeof DummyData !== 'undefined' && window.ZONES && window.ZONES.length) {
+                        const seed = Date.now();
+                        sessionStorage.setItem('dummySeed', seed);
+                        const result = DummyData.generateSessions(window.ZONES, { seed: seed });
+                        window.PAYMENT_SESSIONS = result.sessions;
+                        window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+                    }
+                    break;
+                case 'reset':
+                    if (typeof DummyData !== 'undefined' && window.ZONES && window.ZONES.length) {
+                        sessionStorage.removeItem('dummySeed');
+                        const result = DummyData.generateSessions(window.ZONES); // default seed 12345
+                        window.PAYMENT_SESSIONS = result.sessions;
+                        window.dispatchEvent(new CustomEvent('parkingDataUpdated'));
+                    }
+                    break;
                 case 'theme':
                     document.documentElement.setAttribute('data-theme', e.data.value);
                     updateMonitor();

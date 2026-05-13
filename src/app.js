@@ -168,7 +168,9 @@ function initFirebase() {
             // Hybrid mode: zones from Firestore, sessions generated in-browser
             if (USE_DUMMY_DATA && typeof DummyData !== 'undefined') {
                 console.log('[Hybrid] Regenerating dummy sessions for', zones.length, 'Firestore zones');
-                const result = DummyData.generateSessions(zones);
+                const storedSeed = sessionStorage.getItem('dummySeed');
+                const seed = storedSeed ? parseInt(storedSeed, 10) : undefined;
+                const result = DummyData.generateSessions(zones, seed ? { seed: seed } : undefined);
                 paymentSessions = result.sessions;
                 window.PAYMENT_SESSIONS = paymentSessions;
             }
@@ -238,21 +240,6 @@ function initFirebase() {
         console.error('[Firebase] Init failed:', err);
         showNotification('Firebase not configured. Running in local-only mode.', 'warning');
         return false;
-    }
-}
-
-// Write a payment session to Firestore
-async function syncPaymentSessionToFirebase(session) {
-    if (!paymentSessionsRef) return;
-    try {
-        await paymentSessionsRef.doc(session.id).set(session);
-    } catch (err) {
-        console.error('[Firebase] Failed to sync payment session:', err);
-        await saveOfflineData('offlineQueue', {
-            action: 'syncPaymentSession',
-            data: session,
-            timestamp: new Date().toISOString()
-        });
     }
 }
 
@@ -348,7 +335,8 @@ function loadDummyData() {
     // generate now with whatever zones are available.
     if (typeof DummyData !== 'undefined' && typeof DUMMY_ZONES === 'undefined') {
         var srcZones = (typeof ZONE_DEFINITIONS !== 'undefined') ? ZONE_DEFINITIONS : [];
-        DummyData.generateSessions(srcZones);
+        var storedSeed = sessionStorage.getItem('dummySeed');
+        DummyData.generateSessions(srcZones, storedSeed ? { seed: parseInt(storedSeed, 10) } : undefined);
     }
     if (typeof DUMMY_ZONES !== 'undefined') {
         zones = DUMMY_ZONES;
@@ -424,101 +412,6 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // ============================================================
-// PAYMENT SESSION MANAGEMENT (replaces old Parking Session Logic)
-// ============================================================
-
-/**
- * Create a new payment session
- * This replaces the old sensor-based parking session start
- * @param {string} zoneId - Zone ID where parking occurs
- * @param {string} vehicleId - Vehicle identifier
- * @param {Object} location - GPS coordinates {lat, lng}
- * @param {number} durationMinutes - Parking duration in minutes
- */
-async function createPaymentSession(zoneId, vehicleId, location, durationMinutes) {
-    const zone = zones.find(z => z.id === zoneId);
-    if (!zone) {
-        showNotification('Invalid zone', 'danger');
-        return;
-    }
-
-    // Validate location is within geofence
-    if (!isWithinGeofence(location, zone)) {
-        showNotification('Location is outside the parking zone', 'danger');
-        return;
-    }
-
-    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const now = Date.now();
-
-    const session = {
-        id: sessionId,
-        vehicle_id: vehicleId,
-        lat: location.lat,
-        lng: location.lng,
-        zone_id: zoneId,
-        start_time: now,
-        end_time: now + (durationMinutes * 60 * 1000),
-        duration_minutes: durationMinutes,
-        status: 'active',
-        is_compliant: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-    };
-
-    // Sync to Firestore
-    await syncPaymentSessionToFirebase(session);
-    await saveOfflineData('paymentSessions', session);
-
-    showNotification(`Payment session started in ${zone.name}`, 'success');
-    if ('vibrate' in navigator) navigator.vibrate(50);
-
-    return session;
-}
-
-/**
- * End a payment session
- * This replaces the old sensor-based parking session end
- * @param {string} sessionId - Session ID to end
- */
-async function endPaymentSession(sessionId) {
-    const session = paymentSessions.find(s => s.id === sessionId);
-    if (!session) {
-        showNotification('Session not found', 'danger');
-        return;
-    }
-
-    session.status = 'completed';
-    session.end_time = Date.now();
-    session.updated_at = new Date().toISOString();
-
-    await syncPaymentSessionToFirebase(session);
-    await saveOfflineData('paymentSessions', session);
-
-    showNotification(`Payment session ended`, 'success');
-    if ('vibrate' in navigator) navigator.vibrate([50, 50, 50]);
-}
-
-/**
- * Cancel a payment session
- * @param {string} sessionId - Session ID to cancel
- */
-async function cancelPaymentSession(sessionId) {
-    const session = paymentSessions.find(s => s.id === sessionId);
-    if (!session) {
-        showNotification('Session not found', 'danger');
-        return;
-    }
-
-    session.status = 'cancelled';
-    session.updated_at = new Date().toISOString();
-
-    await syncPaymentSessionToFirebase(session);
-    await saveOfflineData('paymentSessions', session);
-
-    showNotification(`Payment session cancelled`, 'warning');
-}
-
 // ============================================================
 // COMPLIANCE CALCULATION (replaces old Violation Logic)
 // ============================================================
@@ -664,59 +557,6 @@ function showNotification(message, type = 'info') {
     }, 4000);
 }
 
-/**
- * Simulate a random payment session for demo purposes
- * This replaces the old simulateRandomCar function
- */
-function simulateRandomPaymentSession() {
-    if (zones.length === 0) {
-        showNotification('No zones available', 'warning');
-        return;
-    }
-
-    const randomZone = zones[Math.floor(Math.random() * zones.length)];
-    const vehicleId = `VEH_${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
-    const location = randomZone.center;
-    const duration = Math.floor(Math.random() * 60) + 30; // 30-90 minutes
-
-    createPaymentSession(randomZone.id, vehicleId, location, duration);
-}
-
-/**
- * Reset all payment sessions
- * This replaces the old resetAllBays function
- */
-async function resetAllSessions() {
-    if (!confirm('Reset all payment sessions?')) return;
-
-    paymentSessions = [];
-    window.PAYMENT_SESSIONS = paymentSessions;
-
-    // Clear Firebase
-    if (paymentSessionsRef) {
-        const snapshot = await paymentSessionsRef.get();
-        const batch = firestore.batch();
-        snapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-    }
-
-    // Clear IndexedDB
-    if (db) {
-        const transaction = db.transaction(['paymentSessions'], 'readwrite');
-        await transaction.objectStore('paymentSessions').clear();
-    }
-
-    // In dummy mode, repopulate so the demo keeps showing meaningful data
-    if (USE_DUMMY_DATA) {
-        loadDummyData();
-    }
-
-    updateAll();
-    showNotification('System reset complete', 'info');
-}
-
 function refreshData() { updateAll(); }
 
 function updateAll() {
@@ -783,11 +623,6 @@ function updateThemeIcon(theme) {
 }
 
 // Expose functions for global access
-window.createPaymentSession = createPaymentSession;
-window.endPaymentSession = endPaymentSession;
-window.cancelPaymentSession = cancelPaymentSession;
-window.simulateRandomPaymentSession = simulateRandomPaymentSession;
-window.resetAllSessions = resetAllSessions;
 window.refreshData = refreshData;
 window.toggleTheme = toggleTheme;
 

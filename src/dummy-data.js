@@ -8,7 +8,6 @@
 // Public API:
 //   DummyData.generateSessions(zones, cfg)  — (re)generate sessions
 //   DummyData.DEMO_CURRENT_TIME
-//   DummyData.createManualSession(...)
 //
 // Also callable at load time for backward compat when zones
 // are available immediately (USE_DUMMY_ZONES = true).
@@ -61,7 +60,8 @@ function createSession(zone, vehicleId, startOffsetMinutes, durationMinutes) {
 function generateSessions(zones, cfg) {
     cfg = cfg || _cfg;
     zones = zones || _zones;
-    SU.resetSeed(12345); // deterministic output
+    var seed = (cfg && cfg.seed) ? cfg.seed : 12345;
+    SU.resetSeed(seed);
 
     var defaultOcc = cfg.DEFAULT_TARGET_OCCUPANCY || 0.65;
     var legacyTargets = cfg.ZONE_ACTIVE_TARGETS || {};
@@ -155,32 +155,6 @@ function generateSessions(zones, cfg) {
     return { zones: dummyZones, sessions: sessions };
 }
 
-// ============================================================
-// MANUAL TEST SESSIONS
-// ============================================================
-function createManualSession(vehicleId, lat, lng, startOffsetMinutes, durationMinutes) {
-    var startTime = DEMO_CURRENT_TIME + (startOffsetMinutes * 60 * 1000);
-    var endTime = startTime + (durationMinutes * 60 * 1000);
-    var clamped = SU.clampToOperatingHours(startTime, endTime);
-    startTime = clamped.startMs;
-    endTime = clamped.endMs;
-    durationMinutes = Math.round((endTime - startTime) / 60000);
-    return {
-        id:              'manual_' + vehicleId + '_' + Date.now(),
-        vehicle_id:      vehicleId,
-        lat:             lat,
-        lng:             lng,
-        zone_id:         null,
-        start_time:      startTime,
-        end_time:        endTime,
-        duration_minutes: durationMinutes,
-        status:          'active',
-        is_compliant:    false,
-        created_at:      new Date().toISOString(),
-        updated_at:      new Date().toISOString()
-    };
-}
-
 // ---- Auto-generate at load if zones are available (backward compat) ----
 var useDummyZones = _cfg.USE_DUMMY_ZONES !== undefined ? _cfg.USE_DUMMY_ZONES : true;
 if (useDummyZones && _zones && _zones.length) {
@@ -190,7 +164,6 @@ if (useDummyZones && _zones && _zones.length) {
 // ---- Public API ----
 var DummyData = {
     generateSessions: generateSessions,
-    createManualSession: createManualSession,
     DEMO_CURRENT_TIME: DEMO_CURRENT_TIME
 };
 
